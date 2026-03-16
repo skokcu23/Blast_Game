@@ -22,8 +22,8 @@ public class Board
 
     public Board(int width, int height)
     {
-        grid = new Gem[_width, _height];
-        rand = new System.Random();
+        _grid = new Gem[_width, _height];
+        _rand = new System.Random();
     }
 
     public void Initialize()
@@ -50,7 +50,7 @@ public class Board
 
     public void SetGem(Coordinate coordinate, Gem gem)
     {
-        grid[coordinate.x, coordinate.y] = gem;
+        _grid[coordinate.x, coordinate.y] = gem;
     }
 
     //Utility
