@@ -2,37 +2,37 @@ using System;
 
 public class Board
 {
-    private Gem[,] grid;
+    private Gem[,] _grid;
 
-    private int width;
+    private int _width;
     public int Width
     {
-        get { return width; }
-        set { width = value; }
+        get { return _width; }
+        set { _width = value; }
     }
 
-    private int height;
+    private int _height;
     public int Height
     {
-        get { return height; }
-        set { height = value; }
+        get { return _height; }
+        set { _height = value; }
     }
 
-    private Random rand;
+    private Random _rand;
 
     public Board(int width, int height)
     {
-        grid = new Gem[width, height];
-        rand = new Random();
+        grid = new Gem[_width, _height];
+        rand = new System.Random();
     }
 
     public void Initialize()
     {
-        for (int x = 0; x < width; x++)
+        for (int x = 0; x < _width; x++)
         {
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < _height; y++)
             {
-                grid[x, y] = GenerateRandomGem();
+                _grid[x, y] = GenerateRandomGem();
             }
         }
     }
@@ -40,12 +40,12 @@ public class Board
     //Getter and Setters
     public Gem GetGem(Coordinate coordinate)
     {
-        return grid[coordinate.x, coordinate.y];
+        return _grid[coordinate.x, coordinate.y];
     }
 
     public Gem GetGem(int x, int y)
     {
-        return grid[x, y];
+        return _grid[x, y];
     }
 
     public void SetGem(Coordinate coordinate, Gem gem)
@@ -56,7 +56,7 @@ public class Board
     //Utility
     private Gem GenerateRandomGem()
     {
-        int randomInt = rand.Next(0, 4);
+        int randomInt = _rand.Next(0, 5);
 
         switch (randomInt)
         {
