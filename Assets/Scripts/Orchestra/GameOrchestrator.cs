@@ -5,11 +5,28 @@ public class GameOrchestrator : MonoBehaviour
 {
     [SerializeField]
     private BoardView _boardView;
+
+    [SerializeField]
+    private InputManager _inputManager; // New Reference!
     private Board _board;
     private MatchStrategy _matchStrategy;
     private int _moveCount = 25; // From level data in future iterations [cite: 156]
     private bool _isBusy;
 
+    // --- Event Subscription ---
+    private void OnEnable()
+    {
+        if (_inputManager != null)
+            _inputManager.OnCubeTapped += OnCellTapped; // Start listening
+    }
+
+    private void OnDisable()
+    {
+        if (_inputManager != null)
+            _inputManager.OnCubeTapped -= OnCellTapped; // Stop listening
+    }
+
+    // --------------------------
     void Start()
     {
         // 1. Initialize Logic Layer
@@ -19,7 +36,7 @@ public class GameOrchestrator : MonoBehaviour
 
         // 2. Initialize View Layer
         // FIX: Pass 'this' so the BoardView knows who the Orchestrator is
-        _boardView.Initialize(_board, this);
+        _boardView.Initialize(_board);
     }
 
     public async void OnCellTapped(Coordinate coord)

@@ -8,9 +8,6 @@ public class BoardView : MonoBehaviour
     [SerializeField]
     private GameObject _cubePrefab;
 
-    [SerializeField]
-    private GameOrchestrator _orchestrator;
-
     [Header("Cube Sprites")]
     [SerializeField]
     private Sprite _blueSprite;
@@ -30,10 +27,8 @@ public class BoardView : MonoBehaviour
     private float _offsetX;
     private float _offsetY;
 
-    public void Initialize(Board board, GameOrchestrator orchestrator)
+    public void Initialize(Board board)
     {
-        _orchestrator = orchestrator;
-
         // Calculate the exact center of the board
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
@@ -56,7 +51,7 @@ public class BoardView : MonoBehaviour
         CubeView view = go.GetComponent<CubeView>();
 
         Sprite targetSprite = GetSpriteForGem(type);
-        view.Setup(coord, targetSprite, _orchestrator);
+        view.Setup(coord, targetSprite);
 
         // Optional visual tweak: scale down slightly to create a tiny gap between cubes
         go.transform.localScale = new Vector3(0.95f, 0.95f, 1f);
