@@ -1,84 +1,80 @@
 using System;
-using Unity.VisualScripting;
 
 public class Board
 {
-    private Gem[,] _grid;
+    // Make these readonly since we don't reassign the array or random instance
+    private readonly Gem[,] _grid;
+    private readonly Random _rand;
 
-    private int _width;
-    public int Width
-    {
-        get { return _width; }
-        set { _width = value; }
-    }
-
-    private int _height;
-    public int Height
-    {
-        get { return _height; }
-        set { _height = value; }
-    }
-
-    private Random _rand;
+    // Use auto-properties with private setters to protect them from outside changes
+    public int Width { get; private set; }
+    public int Height { get; private set; }
 
     public Board(int width, int height)
     {
-        _grid = new Gem[_width, _height];
-        _rand = new System.Random();
+        // Assign properties first!
+        Width = width;
+        Height = height;
+
+        // Now the grid will be the correct size
+        _grid = new Gem[Width, Height];
+        _rand = new Random();
     }
 
     public void Initialize()
     {
-        for (int x = 0; x < _width; x++)
+        for (int x = 0; x < Width; x++)
         {
-            for (int y = 0; y < _height; y++)
+            for (int y = 0; y < Height; y++)
             {
                 _grid[x, y] = GenerateRandomGem();
             }
         }
     }
 
-    //Getter and Setters
-    public Gem GetGem(Coordinate coordinate)
-    {
+    // --- Getters and Setters ---
 
-        return _grid[coordinate.x, coordinate.y];
-    }
+    // Arrow functions simplify methods that just call other methods
+    public Gem GetGem(Coordinate coordinate) => GetGem(coordinate.x, coordinate.y);
 
     public Gem GetGem(int x, int y)
     {
-        if (x >= 0 && x < _width && y >= 0 && y < _height)
+        if (IsValidCoordinate(x, y))
         {
             return _grid[x, y];
         }
-        throw new Exception();
 
+        // Returning Gem.NONE is usually safer for blast games than throwing an Exception
+        // when checking out-of-bounds (like checking above the top row).
+        return Gem.NONE;
     }
 
     public void SetGem(Coordinate coordinate, Gem gem)
     {
-        _grid[coordinate.x, coordinate.y] = gem;
+        if (IsValidCoordinate(coordinate.x, coordinate.y))
+        {
+            _grid[coordinate.x, coordinate.y] = gem;
+        }
     }
 
-    //Utility
+    // --- Utility ---
+
+    // A central method to check boundaries prevents IndexOutOfRangeExceptions
+    public bool IsValidCoordinate(int x, int y)
+    {
+        return x >= 0 && x < Width && y >= 0 && y < Height;
+    }
+
     private Gem GenerateRandomGem()
     {
-        int randomInt = _rand.Next(0, 5);
-
-        switch (randomInt)
+        // Modern C# 8+ switch expression: much cleaner than a standard switch statement
+        return _rand.Next(0, 5) switch
         {
-            case 0:
-                return Gem.NONE;
-            case 1:
-                return Gem.BLUE;
-            case 2:
-                return Gem.YELLOW;
-            case 3:
-                return Gem.GREEN;
-            case 4:
-                return Gem.RED;
-            default:
-                return Gem.NONE;
-        }
+            1 => Gem.BLUE,
+            2 => Gem.YELLOW,
+            3 => Gem.GREEN,
+            4 => Gem.RED,
+            _ => Gem.NONE,
+        };
     }
 }
