@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class ClassicMatchStrategy : MatchStrategy
@@ -16,47 +15,58 @@ public class ClassicMatchStrategy : MatchStrategy
     {
         Gem gemType = board.GetGem(tap);
 
-        List<Coordinate> resultList = new List<Coordinate>();
+        // Optional: Prevent matching empty spaces
+        if (gemType == Gem.NONE)
+            return new List<Coordinate>();
 
-        ScanBoard(board, resultList, tap, gemType);
+        HashSet<Coordinate> resultList = new HashSet<Coordinate>();
 
-        return resultList;
+        // A boolean array is cleaner for true/false "visited" states
+        bool[,] visited = new bool[board.Width, board.Height];
+
+        // Start the recursive search
+        Dfs(board, resultList, tap, gemType, visited);
+
+        // Convert the HashSet to a List to match your return type
+        return new List<Coordinate>(resultList);
     }
 
-    private void ScanBoard(Board board, List<Coordinate> list, Coordinate tap, Gem gemType)
+    private void Dfs(
+        Board board,
+        HashSet<Coordinate> list,
+        Coordinate current,
+        Gem targetGem,
+        bool[,] visited
+    )
     {
-        //scan upward
-        for (int y = tap.y - 1; y >= 0; y--)
+        // 1. BOUNDARY CHECK: Stop if we are outside the board
+        if (current.x < 0 || current.x >= board.Width || current.y < 0 || current.y >= board.Height)
         {
-            if (board.GetGem(tap.x, y) == gemType)
-            {
-                list.Add(new Coordinate(tap.x, y));
-            }
-        }
-        //scan downward
-        for (int y = tap.y + 1; y < board.Width; y++)
-        {
-            if (board.GetGem(tap.x, y) == gemType)
-            {
-                list.Add(new Coordinate(tap.x, y));
-            }
+            return;
         }
 
-        //scan to left
-        for (int x = tap.x - 1; x >= 0; x--)
+        // 2. VISITED CHECK: Stop if we have already checked this tile
+        if (visited[current.x, current.y])
         {
-            if (board.GetGem(x, tap.y) == gemType)
-            {
-                list.Add(new Coordinate(x, tap.y));
-            }
+            return;
         }
-        //scan right
-        for (int x = tap.x + 1; x < board.Height; x++)
+
+        // 3. Mark the current tile as visited so we don't get stuck in an infinite loop
+        visited[current.x, current.y] = true;
+
+        // 4. GEM CHECK: Stop if the gem isn't the color we are looking for
+        if (board.GetGem(current) != targetGem)
         {
-            if (board.GetGem(x, tap.y) == gemType)
-            {
-                list.Add(new Coordinate(x, tap.y));
-            }
+            return;
         }
+
+        // 5. SUCCESS! It's a match. Add it to our HashSet
+        list.Add(current);
+
+        // 6. Recursively check all 4 neighbors (Up, Down, Right, Left)
+        Dfs(board, list, new Coordinate(current.x, current.y + 1), targetGem, visited); // Up
+        Dfs(board, list, new Coordinate(current.x, current.y - 1), targetGem, visited); // Down
+        Dfs(board, list, new Coordinate(current.x + 1, current.y), targetGem, visited); // Right
+        Dfs(board, list, new Coordinate(current.x - 1, current.y), targetGem, visited); // Left
     }
 }

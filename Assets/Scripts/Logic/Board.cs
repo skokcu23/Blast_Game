@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 
 public class Board
 {
@@ -40,12 +41,18 @@ public class Board
     //Getter and Setters
     public Gem GetGem(Coordinate coordinate)
     {
+
         return _grid[coordinate.x, coordinate.y];
     }
 
     public Gem GetGem(int x, int y)
     {
-        return _grid[x, y];
+        if (x >= 0 && x < _width && y >= 0 && y < _height)
+        {
+            return _grid[x, y];
+        }
+        throw new Exception();
+
     }
 
     public void SetGem(Coordinate coordinate, Gem gem)
