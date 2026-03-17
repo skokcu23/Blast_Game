@@ -3,19 +3,25 @@ using UnityEngine;
 
 public class CubeView : MonoBehaviour
 {
-    private Coordinate _coord;
+    [SerializeField]
+    private SpriteRenderer _spriteRenderer;
+    private Coordinate _coordinate;
     private GameOrchestrator _orchestrator;
 
-    public void Setup(Coordinate coord, Gem type)
+    // This is called by the BoardView when the game starts
+    public void Setup(Coordinate coord, Sprite sprite, GameOrchestrator orchestrator)
     {
-        _coord = coord;
-        _orchestrator = FindFirstObjectByType<GameOrchestrator>();
-        // Set sprite color based on Gem type here...
+        _coordinate = coord;
+        _orchestrator = orchestrator;
+        _spriteRenderer.sprite = sprite;
+
+        // Helpful for debugging in the Hierarchy
+        name = $"Cube_{coord.x}_{coord.y}";
     }
 
     private void OnMouseDown()
     {
-        _orchestrator.OnCellTapped(_coord);
+        _orchestrator.OnCellTapped(_coordinate);
     }
 
     public async Task PlayPopAnimation()

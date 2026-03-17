@@ -12,13 +12,14 @@ public class GameOrchestrator : MonoBehaviour
 
     void Start()
     {
-        // Initialize Logic
-        _board = new Board(8, 10); // Example size
+        // 1. Initialize Logic Layer
+        _board = new Board(8, 10);
         _board.Initialize();
         _matchStrategy = new ClassicMatchStrategy();
 
-        // Initialize View
-        _boardView.Initialize(_board);
+        // 2. Initialize View Layer
+        // FIX: Pass 'this' so the BoardView knows who the Orchestrator is
+        _boardView.Initialize(_board, this);
     }
 
     public async void OnCellTapped(Coordinate coord)
