@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-interface MatchStrategy
+public interface MatchStrategy
 {
     List<Coordinate> findMatches(Board board, Coordinate tap);
 
