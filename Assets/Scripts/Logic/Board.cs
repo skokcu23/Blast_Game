@@ -1,12 +1,13 @@
 using System;
 
+/// <summary>
+/// Pure C# grid that holds the logical state of all cells.
+/// No MonoBehaviour, no UnityEngine dependency — fully NUnit-testable.
+/// </summary>
 public class Board
 {
-    // Make these readonly since we don't reassign the array or random instance
-    private readonly GridItem[,] _grid; // Changed from Gem[,]
-    private readonly Random _rand;
+    private readonly GridItem[,] _grid;
 
-    // Use auto-properties with private setters to protect them from outside changes
     public int Width { get; private set; }
     public int Height { get; private set; }
 
@@ -15,68 +16,104 @@ public class Board
         Width = width;
         Height = height;
         _grid = new GridItem[Width, Height];
-        _rand = new Random();
+
+        // Fill with empty items so no cell is ever null
+        for (int x = 0; x < Width; x++)
+            for (int y = 0; y < Height; y++)
+                _grid[x, y] = ItemFactory.CreateEmpty();
     }
 
-    public void Initialize()
+    // --- Initialization ---
+
+    /// <summary>
+    /// Populate the board from a parsed level file.
+    /// Grid data in LevelData is stored bottom-left → top-right.
+    /// </summary>
+    public void Initialize(LevelData levelData)
     {
-        for (int x = 0; x < Width; x++)
+        for (int y = 0; y < Height; y++)
         {
-            for (int y = 0; y < Height; y++)
+            for (int x = 0; x < Width; x++)
             {
-                _grid[x, y] = new GridItem(GenerateRandomGem());
+                string itemId = levelData.GetItemIdAt(x, y);
+                _grid[x, y] = ItemFactory.CreateItem(itemId);
             }
         }
     }
 
+    /// <summary>
+    /// Fill the entire board with random cubes. Useful for testing
+    /// and as a fallback if no level data is available.
+    /// </summary>
+    public void InitializeRandom()
+    {
+        for (int x = 0; x < Width; x++)
+            for (int y = 0; y < Height; y++)
+                _grid[x, y] = ItemFactory.CreateRandomCube();
+    }
+
     // --- Getters and Setters ---
-    public GridItem GetItem(Coordinate coordinate) => GetItem(coordinate.x, coordinate.y);
+
+    public GridItem GetItem(Coordinate coord) => GetItem(coord.x, coord.y);
 
     public GridItem GetItem(int x, int y)
     {
         if (IsValidCoordinate(x, y))
-        {
             return _grid[x, y];
-        }
 
-        // Return a safe "Empty" item if checking out of bounds
-        return new GridItem(Gem.NONE, false, false, 0);
+        // Out-of-bounds returns a safe empty item (fail gracefully)
+        return ItemFactory.CreateEmpty();
     }
 
-    public void SetItem(Coordinate coordinate, GridItem item)
+    public void SetItem(Coordinate coord, GridItem item)
     {
-        if (IsValidCoordinate(coordinate.x, coordinate.y))
-        {
-            _grid[coordinate.x, coordinate.y] = item;
-        }
+        if (IsValidCoordinate(coord.x, coord.y))
+            _grid[coord.x, coord.y] = item;
     }
 
     public void SetItem(int x, int y, GridItem item)
     {
         if (IsValidCoordinate(x, y))
-        {
             _grid[x, y] = item;
-        }
     }
 
-    // --- Utility ---
+    // --- Queries ---
 
-    // A central method to check boundaries prevents IndexOutOfRangeExceptions
     public bool IsValidCoordinate(int x, int y)
     {
         return x >= 0 && x < Width && y >= 0 && y < Height;
     }
 
-    private Gem GenerateRandomGem()
+    /// <summary>
+    /// Check whether all obstacles on the board have been destroyed.
+    /// This is the win condition for every level.
+    /// </summary>
+    public bool AreAllObstaclesCleared()
     {
-        // Modern C# 8+ switch expression: much cleaner than a standard switch statement
-        return _rand.Next(0, 5) switch
+        for (int x = 0; x < Width; x++)
+            for (int y = 0; y < Height; y++)
+                if (_grid[x, y].IsObstacle && _grid[x, y].IsAlive)
+                    return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Count remaining obstacles (for UI goal display).
+    /// </summary>
+    public int CountObstacles(string obstacleId = null)
+    {
+        int count = 0;
+        for (int x = 0; x < Width; x++)
         {
-            1 => Gem.BLUE,
-            2 => Gem.YELLOW,
-            3 => Gem.GREEN,
-            4 => Gem.RED,
-            _ => Gem.NONE,
-        };
+            for (int y = 0; y < Height; y++)
+            {
+                var item = _grid[x, y];
+                if (!item.IsObstacle || !item.IsAlive)
+                    continue;
+                if (obstacleId == null || item.Id == obstacleId)
+                    count++;
+            }
+        }
+        return count;
     }
 }
