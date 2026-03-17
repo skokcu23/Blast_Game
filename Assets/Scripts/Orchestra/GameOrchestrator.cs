@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine;
 
+
 public class GameOrchestrator : MonoBehaviour
 {
     [SerializeField]
@@ -8,6 +9,7 @@ public class GameOrchestrator : MonoBehaviour
 
     [SerializeField]
     private InputManager _inputManager; // New Reference!
+    private GravityProcessor _gravityProcessor = new GravityProcessor();
     private Board _board;
     private MatchStrategy _matchStrategy;
     private int _moveCount = 25; // From level data in future iterations [cite: 156]
@@ -59,7 +61,13 @@ public class GameOrchestrator : MonoBehaviour
             // Tell the puppet to play the "Pop" animation
             await _boardView.AnimateBlast(matches);
 
-            // In Iteration 2, we would call Fall/Refill here
+            // 2. GRAVITY
+            var gravityMovements = _gravityProcessor.ApplyGravity(_board);
+            await _boardView.AnimateGravity(gravityMovements);
+
+            // 3. REFILL
+            var refillMovements = _gravityProcessor.FillEmptySpaces(_board);
+            await _boardView.AnimateRefill(refillMovements);
 
             _isBusy = false;
         }
