@@ -57,6 +57,14 @@ public class Board
         }
     }
 
+    public void SetGem(int x, int y, Gem gem)
+    {
+        if (IsValidCoordinate(x, y))
+        {
+            _grid[x, y] = gem;
+        }
+    }
+
     // --- Utility ---
 
     // A central method to check boundaries prevents IndexOutOfRangeExceptions
