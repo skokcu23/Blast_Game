@@ -9,29 +9,39 @@ public class ClassicMatchStrategyTests
     [SetUp]
     public void Setup()
     {
-        // This runs before EVERY test, giving us a fresh 3x3 board
         _testBoard = new Board(3, 3);
+
+        // CRITICAL FIX: Initialize every spot to a blank GridItem so DFS doesn't hit 'null'
+        for (int x = 0; x < _testBoard.Width; x++)
+        {
+            for (int y = 0; y < _testBoard.Height; y++)
+            {
+                _testBoard.SetItem(x, y, new GridItem(Gem.NONE));
+            }
+        }
+
         _strategy = new ClassicMatchStrategy();
     }
 
     [Test]
     public void FindMatches_SingleIsolatedGem_ReturnsEmptyList()
     {
-        // Arrange: Make the center RED, and everything else BLUE
+        // Arrange: Make the whole board BLUE
         for (int x = 0; x < 3; x++)
         {
             for (int y = 0; y < 3; y++)
             {
-                _testBoard.SetGem(x, y, Gem.BLUE);
+                _testBoard.SetItem(x, y, new GridItem(Gem.BLUE));
             }
         }
 
-        _testBoard.SetGem(1, 1, Gem.RED);
+        // Set an isolated RED gem
+        _testBoard.SetItem(1, 1, new GridItem(Gem.RED));
 
-        // Act: Click the isolated RED gem
+        // Act
         var matches = _strategy.findMatches(_testBoard, new Coordinate(1, 1));
 
-        // Assert: Because of the Match-2 rule, an isolated gem should return 0 matches
+        // Assert
         Assert.AreEqual(
             0,
             matches.Count,
@@ -42,19 +52,15 @@ public class ClassicMatchStrategyTests
     [Test]
     public void FindMatches_LShapedMatch_FindsAllConnected()
     {
-        // Arrange: Create an L-shape of GREEN gems
-        /*
-         * [G][ ][ ]
-         * [G][ ][ ]
-         * [G][G][G]
-         */
-        _testBoard.SetGem(0, 2, Gem.GREEN);
-        _testBoard.SetGem(0, 1, Gem.GREEN);
-        _testBoard.SetGem(0, 0, Gem.GREEN);
-        _testBoard.SetGem(1, 0, Gem.GREEN);
-        _testBoard.SetGem(2, 0, Gem.GREEN);
+        // Arrange: Create an L-shape of GREEN gems.
+        // (The rest of the board is already safely initialized to NONE in Setup)
+        _testBoard.SetItem(0, 2, new GridItem(Gem.GREEN));
+        _testBoard.SetItem(0, 1, new GridItem(Gem.GREEN));
+        _testBoard.SetItem(0, 0, new GridItem(Gem.GREEN));
+        _testBoard.SetItem(1, 0, new GridItem(Gem.GREEN));
+        _testBoard.SetItem(2, 0, new GridItem(Gem.GREEN));
 
-        // Act: Click the corner
+        // Act
         var matches = _strategy.findMatches(_testBoard, new Coordinate(0, 0));
 
         // Assert
@@ -65,15 +71,17 @@ public class ClassicMatchStrategyTests
     public void Blast_RemovesGemsFromBoard()
     {
         // Arrange
-        _testBoard.SetGem(0, 0, Gem.YELLOW);
+        _testBoard.SetItem(0, 0, new GridItem(Gem.YELLOW));
         List<Coordinate> toBlast = new List<Coordinate> { new Coordinate(0, 0) };
 
         // Act
         _strategy.Blast(_testBoard, toBlast);
 
         // Assert
-        // Assuming your Blast method sets the gem to a 'NONE' or 'EMPTY' state.
-        // Adjust Gem.NONE to whatever your empty state enum is!
-        Assert.AreEqual(Gem.NONE, _testBoard.GetGem(0, 0), "Blasted coordinate should be emptied.");
+        Assert.AreEqual(
+            Gem.NONE,
+            _testBoard.GetItem(0, 0).GemType,
+            "Blasted coordinate should be emptied."
+        );
     }
 }

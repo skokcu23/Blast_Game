@@ -6,21 +6,22 @@ public class ClassicMatchStrategy : MatchStrategy
     {
         foreach (var coordinate in matches)
         {
-            board.SetGem(coordinate, Gem.NONE);
+            board.SetItem(coordinate, new GridItem(Gem.NONE, false, false, 0));
         }
     }
 
     public List<Coordinate> findMatches(Board board, Coordinate tap)
     {
-        Gem gemType = board.GetGem(tap);
+        GridItem tappedItem = board.GetItem(tap);
 
-        if (gemType == Gem.NONE)
+        // Don't try to match empty spaces or obstacles
+        if (tappedItem.IsEmpty || tappedItem.IsObstacle)
             return new List<Coordinate>();
 
         HashSet<Coordinate> resultList = new HashSet<Coordinate>();
         bool[,] visited = new bool[board.Width, board.Height];
 
-        Dfs(board, resultList, tap, gemType, visited);
+        Dfs(board, resultList, tap, tappedItem.GemType, visited);
 
         // REQUIREMENT: At least 2 adjacent cubes to blast
         if (resultList.Count < 2)
@@ -35,7 +36,7 @@ public class ClassicMatchStrategy : MatchStrategy
         Board board,
         HashSet<Coordinate> list,
         Coordinate current,
-        Gem targetGem,
+        Gem tarGetItem,
         bool[,] visited
     )
     {
@@ -43,15 +44,18 @@ public class ClassicMatchStrategy : MatchStrategy
             return;
         if (visited[current.x, current.y])
             return;
-        if (board.GetGem(current) != targetGem)
+
+        GridItem item = board.GetItem(current);
+
+        if (item.GemType != tarGetItem || item.IsObstacle)
             return;
 
         visited[current.x, current.y] = true;
         list.Add(current);
 
-        Dfs(board, list, new Coordinate(current.x, current.y + 1), targetGem, visited);
-        Dfs(board, list, new Coordinate(current.x, current.y - 1), targetGem, visited);
-        Dfs(board, list, new Coordinate(current.x + 1, current.y), targetGem, visited);
-        Dfs(board, list, new Coordinate(current.x - 1, current.y), targetGem, visited);
+        Dfs(board, list, new Coordinate(current.x, current.y + 1), tarGetItem, visited);
+        Dfs(board, list, new Coordinate(current.x, current.y - 1), tarGetItem, visited);
+        Dfs(board, list, new Coordinate(current.x + 1, current.y), tarGetItem, visited);
+        Dfs(board, list, new Coordinate(current.x - 1, current.y), tarGetItem, visited);
     }
 }

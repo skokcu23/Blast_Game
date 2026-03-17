@@ -16,20 +16,20 @@ public class GravityProcessor
             for (int y = 0; y < board.Height; y++)
             {
                 Coordinate current = new Coordinate(x, y);
+                GridItem currentItem = board.GetItem(current);
 
-                if (board.GetGem(current) == Gem.NONE) // Empty space found!
+                if (currentItem.IsEmpty) // Empty space found!
                 {
                     emptySpacesCount++;
                 }
-                else if (emptySpacesCount > 0)
+                else if (emptySpacesCount > 0 && currentItem.IsMovable)
                 {
                     // We found a gem, and there is empty space below it. Drop it!
                     Coordinate newCoord = new Coordinate(x, y - emptySpacesCount);
-                    Gem gemToMove = board.GetGem(current);
 
-                    // Update the Board Memory
-                    board.SetGem(newCoord, gemToMove);
-                    board.SetGem(current, Gem.NONE);
+                    // Move the item down
+                    board.SetItem(newCoord, currentItem);
+                    board.SetItem(current, new GridItem(Gem.NONE, false, false, 0));
 
                     // Record the movement for the Unity visual layer
                     movements.Add(
@@ -37,7 +37,7 @@ public class GravityProcessor
                         {
                             StartPos = current,
                             EndPos = newCoord,
-                            GemType = gemToMove,
+                            GemType = currentItem.GemType,
                         }
                     );
                 }
@@ -57,14 +57,15 @@ public class GravityProcessor
             {
                 Coordinate current = new Coordinate(x, y);
 
-                if (board.GetGem(current) == Gem.NONE)
+                if (board.GetItem(current).IsEmpty)
                 {
                     // Generate a new random gem (Assuming your Gem enum goes from 1 to 4)
                     // If your Gem enum is different, update this to your GenerateRandomGem logic!
                     Gem randomGem = (Gem)Random.Range(0, 4);
+                    GridItem newItem = new GridItem(randomGem);
 
                     // Update Board Memory
-                    board.SetGem(current, randomGem);
+                    board.SetItem(current, newItem);
 
                     // Calculate a start position "above the board" so it slides onto the screen
                     Coordinate spawnPos = new Coordinate(x, board.Height + y);

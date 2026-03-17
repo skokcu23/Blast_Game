@@ -8,28 +8,44 @@ public class GravityProcessorTests
     [SetUp]
     public void Setup()
     {
-        // This runs before every test to give us a fresh processor
         _processor = new GravityProcessor();
+    }
+
+    // Helper method to guarantee no null references
+    private Board CreateSafeBoard(int width, int height)
+    {
+        Board board = new Board(width, height);
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                board.SetItem(x, y, new GridItem(Gem.NONE));
+            }
+        }
+        return board;
     }
 
     [Test]
     public void ApplyGravity_WithEmptySpaceAtBottom_GemsFallDown()
     {
-        // ARRANGE: A single column, 3 rows high.
-        Board board = new Board(1, 3);
-        board.SetGem(0, 0, Gem.NONE); // Bottom is empty!
-        board.SetGem(0, 1, Gem.RED); // Middle is Red
-        board.SetGem(0, 2, Gem.BLUE); // Top is Blue
+        // ARRANGE
+        Board board = CreateSafeBoard(1, 3);
+        board.SetItem(0, 0, new GridItem(Gem.NONE)); // Bottom is empty
+        board.SetItem(0, 1, new GridItem(Gem.RED)); // Middle is Red
+        board.SetItem(0, 2, new GridItem(Gem.BLUE)); // Top is Blue
 
         // ACT
         List<GemMovement> movements = _processor.ApplyGravity(board);
 
-        // ASSERT: Logic Board checks
-        Assert.AreEqual(Gem.RED, board.GetGem(0, 0), "Red gem should fall to the bottom.");
-        Assert.AreEqual(Gem.BLUE, board.GetGem(0, 1), "Blue gem should fall to the middle.");
-        Assert.AreEqual(Gem.NONE, board.GetGem(0, 2), "Top spot should now be empty.");
+        // ASSERT
+        Assert.AreEqual(Gem.RED, board.GetItem(0, 0).GemType, "Red gem should fall to the bottom.");
+        Assert.AreEqual(
+            Gem.BLUE,
+            board.GetItem(0, 1).GemType,
+            "Blue gem should fall to the middle."
+        );
+        Assert.AreEqual(Gem.NONE, board.GetItem(0, 2).GemType, "Top spot should now be empty.");
 
-        // ASSERT: Movement Data checks
         Assert.AreEqual(2, movements.Count, "Exactly 2 gems should have moved.");
         Assert.AreEqual(new Coordinate(0, 1), movements[0].StartPos);
         Assert.AreEqual(new Coordinate(0, 0), movements[0].EndPos);
@@ -39,10 +55,10 @@ public class GravityProcessorTests
     public void ApplyGravity_WithMultipleEmptySpaces_GemFallsMultipleRows()
     {
         // ARRANGE
-        Board board = new Board(1, 3);
-        board.SetGem(0, 0, Gem.NONE);
-        board.SetGem(0, 1, Gem.NONE);
-        board.SetGem(0, 2, Gem.GREEN); // Top is Green, bottom two are empty
+        Board board = CreateSafeBoard(1, 3);
+        board.SetItem(0, 0, new GridItem(Gem.NONE));
+        board.SetItem(0, 1, new GridItem(Gem.NONE));
+        board.SetItem(0, 2, new GridItem(Gem.GREEN));
 
         // ACT
         List<GemMovement> movements = _processor.ApplyGravity(board);
@@ -50,61 +66,59 @@ public class GravityProcessorTests
         // ASSERT
         Assert.AreEqual(
             Gem.GREEN,
-            board.GetGem(0, 0),
+            board.GetItem(0, 0).GemType,
             "Green gem should drop all the way to the bottom."
         );
         Assert.AreEqual(1, movements.Count, "Only 1 gem moved.");
-        Assert.AreEqual(
-            new Coordinate(0, 0),
-            movements[0].EndPos,
-            "The movement end position should be row 0."
-        );
+        Assert.AreEqual(new Coordinate(0, 0), movements[0].EndPos);
     }
 
     [Test]
     public void ApplyGravity_NoEmptySpaces_DoesNothing()
     {
-        // ARRANGE: A fully packed board
-        Board board = new Board(1, 2);
-        board.SetGem(0, 0, Gem.RED);
-        board.SetGem(0, 1, Gem.BLUE);
+        // ARRANGE
+        Board board = CreateSafeBoard(1, 2);
+        board.SetItem(0, 0, new GridItem(Gem.RED));
+        board.SetItem(0, 1, new GridItem(Gem.BLUE));
 
         // ACT
         List<GemMovement> movements = _processor.ApplyGravity(board);
 
         // ASSERT
         Assert.AreEqual(0, movements.Count, "No movements should be recorded.");
-        Assert.AreEqual(Gem.RED, board.GetGem(0, 0), "Red should still be at bottom.");
+        Assert.AreEqual(Gem.RED, board.GetItem(0, 0).GemType, "Red should still be at bottom.");
     }
 
     [Test]
     public void FillEmptySpaces_ReplacesAllNoneGemsWithNewColors()
     {
         // ARRANGE
-        Board board = new Board(2, 2);
-        board.SetGem(0, 0, Gem.RED);
-        board.SetGem(0, 1, Gem.NONE); // Needs refill (y = 1)
-        board.SetGem(1, 0, Gem.NONE); // Needs refill (y = 0)
-        board.SetGem(1, 1, Gem.BLUE);
+        Board board = CreateSafeBoard(2, 2);
+        board.SetItem(0, 0, new GridItem(Gem.RED));
+        board.SetItem(0, 1, new GridItem(Gem.NONE));
+        board.SetItem(1, 0, new GridItem(Gem.NONE));
+        board.SetItem(1, 1, new GridItem(Gem.BLUE));
 
         // ACT
         List<GemMovement> newGems = _processor.FillEmptySpaces(board);
 
         // ASSERT
         Assert.AreEqual(2, newGems.Count, "Should generate exactly 2 new gems.");
-
-        // Ensure the board memory was updated
-        Assert.AreNotEqual(Gem.NONE, board.GetGem(0, 1), "Spot (0,1) should have a new color.");
-        Assert.AreNotEqual(Gem.NONE, board.GetGem(1, 0), "Spot (1,0) should have a new color.");
-
-        // newGems[0] is for space (0,1). Math: Height(2) + y(1) = 3
+        Assert.AreNotEqual(
+            Gem.NONE,
+            board.GetItem(0, 1).GemType,
+            "Spot (0,1) should have a new color."
+        );
+        Assert.AreNotEqual(
+            Gem.NONE,
+            board.GetItem(1, 0).GemType,
+            "Spot (1,0) should have a new color."
+        );
         Assert.AreEqual(
             3,
             newGems[0].StartPos.y,
             "The gem falling to y=1 should spawn at height 3."
         );
-
-        // newGems[1] is for space (1,0). Math: Height(2) + y(0) = 2
         Assert.AreEqual(
             2,
             newGems[1].StartPos.y,

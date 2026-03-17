@@ -3,7 +3,7 @@ using System;
 public class Board
 {
     // Make these readonly since we don't reassign the array or random instance
-    private readonly Gem[,] _grid;
+    private readonly GridItem[,] _grid; // Changed from Gem[,]
     private readonly Random _rand;
 
     // Use auto-properties with private setters to protect them from outside changes
@@ -12,12 +12,9 @@ public class Board
 
     public Board(int width, int height)
     {
-        // Assign properties first!
         Width = width;
         Height = height;
-
-        // Now the grid will be the correct size
-        _grid = new Gem[Width, Height];
+        _grid = new GridItem[Width, Height];
         _rand = new Random();
     }
 
@@ -27,41 +24,38 @@ public class Board
         {
             for (int y = 0; y < Height; y++)
             {
-                _grid[x, y] = GenerateRandomGem();
+                _grid[x, y] = new GridItem(GenerateRandomGem());
             }
         }
     }
 
     // --- Getters and Setters ---
+    public GridItem GetItem(Coordinate coordinate) => GetItem(coordinate.x, coordinate.y);
 
-    // Arrow functions simplify methods that just call other methods
-    public Gem GetGem(Coordinate coordinate) => GetGem(coordinate.x, coordinate.y);
-
-    public Gem GetGem(int x, int y)
+    public GridItem GetItem(int x, int y)
     {
         if (IsValidCoordinate(x, y))
         {
             return _grid[x, y];
         }
 
-        // Returning Gem.NONE is usually safer for blast games than throwing an Exception
-        // when checking out-of-bounds (like checking above the top row).
-        return Gem.NONE;
+        // Return a safe "Empty" item if checking out of bounds
+        return new GridItem(Gem.NONE, false, false, 0);
     }
 
-    public void SetGem(Coordinate coordinate, Gem gem)
+    public void SetItem(Coordinate coordinate, GridItem item)
     {
         if (IsValidCoordinate(coordinate.x, coordinate.y))
         {
-            _grid[coordinate.x, coordinate.y] = gem;
+            _grid[coordinate.x, coordinate.y] = item;
         }
     }
 
-    public void SetGem(int x, int y, Gem gem)
+    public void SetItem(int x, int y, GridItem item)
     {
         if (IsValidCoordinate(x, y))
         {
-            _grid[x, y] = gem;
+            _grid[x, y] = item;
         }
     }
 

@@ -14,14 +14,19 @@ public class BoardTests
     }
 
     [Test]
-    public void Board_SetAndGetGem_WorksCorrectly()
+    public void Board_SetAndGetItem_WorksCorrectly()
     {
         // Arrange
         Board board = new Board(5, 5);
 
+        // Initialize the single coordinate we are going to test
+        board.SetItem(2, 2, new GridItem(Gem.NONE));
+
+        GridItem newItem = new GridItem(Gem.BLUE);
+
         // Act
-        board.SetGem(2, 2, Gem.BLUE);
-        Gem retrievedGem = board.GetGem(2, 2);
+        board.SetItem(2, 2, newItem);
+        Gem retrievedGem = board.GetItem(2, 2).GemType;
 
         // Assert
         Assert.AreEqual(

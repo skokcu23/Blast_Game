@@ -34,7 +34,7 @@ public class BoardView : MonoBehaviour
         {
             for (int y = 0; y < board.Height; y++)
             {
-                SpawnCube(new Coordinate(x, y), board.GetGem(x, y));
+                SpawnCube(new Coordinate(x, y), board.GetItem(x, y).GemType);
             }
         }
     }
