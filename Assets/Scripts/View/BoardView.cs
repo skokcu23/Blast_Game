@@ -3,12 +3,16 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// The View layer: visually reflects the Board's logical state.
+/// The View layer: a puppet stage that visually reflects the Board's state.
 ///
-/// Animation bug fixes (3B v2):
-///   - AnimateRocketExplosion: TriggeredRockets added to allDestroyed
-///   - Off-path cells (3×3 corners) cleaned up after projectile animation
-///   - AnimateRefill/AnimateGravity: defensive destroy of stale dictionary entries
+/// Knows nothing about game rules. The Orchestrator iterates TurnResult.Steps
+/// and calls the appropriate animation method for each step.
+///
+/// Bug fixes from 3B audit are baked in:
+///   - DestroyCubeAt() for consistent cleanup
+///   - TriggeredRockets in allDestroyed set
+///   - Off-path cleanup pass after projectile animation
+///   - Defensive destroy in AnimateGravity/AnimateRefill
 /// </summary>
 public class BoardView : MonoBehaviour
 {
@@ -43,6 +47,7 @@ public class BoardView : MonoBehaviour
     [SerializeField] private Sprite _verticalPartTopSprite;
     [SerializeField] private Sprite _verticalPartBottomSprite;
 
+    // --- Internal state ---
     private Dictionary<Coordinate, CubeView> _activeCubes = new Dictionary<Coordinate, CubeView>();
     private float _offsetX;
     private float _offsetY;
@@ -54,6 +59,7 @@ public class BoardView : MonoBehaviour
 
     public void Initialize(Board board)
     {
+        // Clear previous level visuals
         foreach (var kvp in _activeCubes)
         {
             if (kvp.Value != null)
@@ -62,9 +68,11 @@ public class BoardView : MonoBehaviour
         _activeCubes.Clear();
         _currentHintCoords.Clear();
 
+        // Center the grid
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
 
+        // Spawn visuals for all non-empty cells
         for (int x = 0; x < board.Width; x++)
         {
             for (int y = 0; y < board.Height; y++)
@@ -82,6 +90,7 @@ public class BoardView : MonoBehaviour
     private void FitCameraToBoard(int boardWidth, int boardHeight)
     {
         if (Camera.main == null) return;
+
         float padding = 2f;
         float bottomPadding = 1f;
         float requiredHeight = boardHeight + padding + bottomPadding;
@@ -89,6 +98,7 @@ public class BoardView : MonoBehaviour
         float requiredWidth = boardWidth + 1f;
         float heightFromWidth = (requiredWidth / aspectRatio) / 2f;
         float orthoSize = Mathf.Max(requiredHeight / 2f, heightFromWidth);
+
         Camera.main.orthographicSize = orthoSize;
         float verticalOffset = (padding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
@@ -134,7 +144,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // SPAWNING
+    // SPAWNING & CLEANUP
     // ==========================================
 
     private CubeView SpawnCube(Coordinate coord, string itemId)
@@ -154,8 +164,8 @@ public class BoardView : MonoBehaviour
     }
 
     /// <summary>
-    /// Safely destroy and remove a CubeView from the dictionary.
-    /// No-op if the coordinate doesn't exist or is already null.
+    /// Safely destroy and remove a CubeView at a coordinate.
+    /// No-op if nothing exists there.
     /// </summary>
     private void DestroyCubeAt(Coordinate coord)
     {
@@ -187,6 +197,7 @@ public class BoardView : MonoBehaviour
 
     public void UpdateRocketHints(Dictionary<Coordinate, string> newHints)
     {
+        // Turn OFF old hints
         foreach (var oldCoord in _currentHintCoords)
         {
             if (!newHints.ContainsKey(oldCoord))
@@ -196,6 +207,7 @@ public class BoardView : MonoBehaviour
             }
         }
 
+        // Turn ON / update new hints
         foreach (var kvp in newHints)
         {
             if (_activeCubes.TryGetValue(kvp.Key, out var cube))
@@ -206,7 +218,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // ANIMATION: Normal Blast
+    // ANIMATION: Blast (< 4 cubes, normal pop)
     // ==========================================
 
     public async Task AnimateBlast(BlastResult result)
@@ -241,12 +253,13 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // ANIMATION: Rocket Creation (merge)
+    // ANIMATION: Rocket Creation (cubes merge to center)
     // ==========================================
 
-    public async Task AnimateRocketCreation(BlastResult blastResult, Coordinate tappedCell)
+    public async Task AnimateRocketCreation(BlastResult blastResult)
     {
-        List<Task> mergeTasks = new List<Task>();
+        Coordinate tappedCell = blastResult.RocketSpawnPosition;
+        List<Task> tasks = new List<Task>();
 
         foreach (var coord in blastResult.BlastedCoordinates)
         {
@@ -254,34 +267,38 @@ public class BoardView : MonoBehaviour
             {
                 _activeCubes.Remove(coord);
                 if (coord == tappedCell)
-                    mergeTasks.Add(PlayShrinkAnimation(cube));
+                    tasks.Add(PlayShrinkAnimation(cube));
                 else
-                    mergeTasks.Add(PlayMergeAnimation(cube, tappedCell));
+                    tasks.Add(PlayMergeAnimation(cube, tappedCell));
             }
         }
 
         foreach (var coord in blastResult.DamagedObstacles)
         {
             if (_activeCubes.TryGetValue(coord, out var cube))
-                mergeTasks.Add(PlayDamageShake(cube));
+                tasks.Add(PlayDamageShake(cube));
         }
 
         foreach (var coord in blastResult.DestroyedObstacles)
         {
             if (_activeCubes.TryGetValue(coord, out var cube))
             {
-                mergeTasks.Add(PlayPopAnimation(cube));
+                tasks.Add(PlayPopAnimation(cube));
                 _activeCubes.Remove(coord);
             }
         }
 
-        await Task.WhenAll(mergeTasks);
+        await Task.WhenAll(tasks);
     }
+
+    // ==========================================
+    // ANIMATION: Rocket Spawn (pop-in after creation)
+    // ==========================================
 
     public void SpawnRocketVisual(RocketCreationData data)
     {
         if (data == null) return;
-        DestroyCubeAt(data.SpawnPosition); // Defensive cleanup
+        DestroyCubeAt(data.SpawnPosition);
         CubeView rocketView = SpawnCube(data.SpawnPosition, data.RocketId);
         rocketView.transform.localScale = Vector3.zero;
         StartCoroutine(ScaleUpRoutine(rocketView, 0.2f));
@@ -304,24 +321,15 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // ANIMATION: Rocket Explosion (3B)
+    // ANIMATION: Rocket Explosion (projectile parts)
     // ==========================================
 
-    /// <summary>
-    /// Animate one rocket explosion:
-    /// 1. Remove rocket visual at origin
-    /// 2. Spawn two projectile sprites
-    /// 3. Move projectiles along PathA/PathB, destroying cells as they pass
-    /// 4. Cleanup: destroy off-path cells (3×3 corners in combos) and triggered rockets
-    /// 5. Destroy projectile sprites
-    /// </summary>
     public async Task AnimateRocketExplosion(RocketExplosionData data)
     {
         // 1. Remove rocket visual at origin
         DestroyCubeAt(data.Origin);
 
-        // 2. Build the set of ALL cells that should be visually destroyed
-        //    Includes cubes, obstacles, AND triggered rockets (ANIM BUG 1 fix)
+        // 2. Build complete set of cells to destroy visually
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
         foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
         foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
@@ -343,24 +351,21 @@ public class BoardView : MonoBehaviour
         GameObject partAObj = CreateProjectile(data.Origin, partASprite);
         GameObject partBObj = CreateProjectile(data.Origin, partBSprite);
 
-        // 4. Animate both paths simultaneously — cells destroyed as projectiles reach them
-        Task pathATask = AnimateProjectilePath(partAObj, data.PathA, allDestroyed);
-        Task pathBTask = AnimateProjectilePath(partBObj, data.PathB, allDestroyed);
-        await Task.WhenAll(pathATask, pathBTask);
+        // 4. Animate both paths in parallel
+        await Task.WhenAll(
+            AnimateProjectilePath(partAObj, data.PathA, allDestroyed),
+            AnimateProjectilePath(partBObj, data.PathB, allDestroyed)
+        );
 
-        // 5. Destroy projectile objects
+        // 5. Destroy projectiles
         if (partAObj != null) Destroy(partAObj);
         if (partBObj != null) Destroy(partBObj);
 
-        // 6. CLEANUP PASS: Destroy any cells in allDestroyed that a projectile
-        //    never reached (e.g., 3×3 corner cells not on any directional path).
-        //    This prevents zombie GameObjects. (ANIM BUG 2 fix)
+        // 6. Cleanup pass: destroy off-path cells (3×3 corners in combos)
         foreach (var coord in allDestroyed)
-        {
             DestroyCubeAt(coord);
-        }
 
-        // 7. Shake damaged obstacles that survived
+        // 7. Shake damaged obstacles
         List<Task> shakeTasks = new List<Task>();
         foreach (var coord in data.DamagedObstacles)
         {
@@ -381,21 +386,17 @@ public class BoardView : MonoBehaviour
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.sortingOrder = 10;
-
         go.transform.localScale = new Vector3(0.95f, 0.95f, 1f);
+
         return go;
     }
 
-    /// <summary>
-    /// Move a projectile through cells sequentially.
-    /// At each cell, if it's in the destroyedCoords set, destroy its CubeView.
-    /// </summary>
     private async Task AnimateProjectilePath(
         GameObject projectile, List<Coordinate> path, HashSet<Coordinate> destroyedCoords)
     {
         if (projectile == null || path.Count == 0) return;
 
-        float moveTime = 0.04f;
+        float moveTime = 0.04f; // Per cell speed
 
         for (int i = 0; i < path.Count; i++)
         {
@@ -417,7 +418,7 @@ public class BoardView : MonoBehaviour
             if (projectile != null)
                 projectile.transform.position = targetPos;
 
-            // Destroy the visual at this cell if marked
+            // Destroy cell visual as projectile passes
             if (destroyedCoords.Contains(cell))
             {
                 if (_activeCubes.TryGetValue(cell, out var cellCube))
@@ -442,10 +443,7 @@ public class BoardView : MonoBehaviour
             if (_activeCubes.TryGetValue(move.StartPos, out CubeView cube))
             {
                 _activeCubes.Remove(move.StartPos);
-
-                // Defensive: destroy any stale visual at the target position (ANIM BUG 3 fix)
-                DestroyCubeAt(move.EndPos);
-
+                DestroyCubeAt(move.EndPos); // Defensive: clear stale
                 _activeCubes[move.EndPos] = cube;
                 tasks.Add(SlideCubeVisually(cube, move.EndPos, 0.3f));
             }
@@ -464,8 +462,7 @@ public class BoardView : MonoBehaviour
 
         foreach (var move in newItems)
         {
-            // Defensive: destroy any stale visual at target position (ANIM BUG 3 fix)
-            DestroyCubeAt(move.EndPos);
+            DestroyCubeAt(move.EndPos); // Defensive: clear stale
 
             Vector3 spawnWorldPos = GridToWorld(move.StartPos);
             GameObject go = Instantiate(_cubePrefab, spawnWorldPos, Quaternion.identity, transform);

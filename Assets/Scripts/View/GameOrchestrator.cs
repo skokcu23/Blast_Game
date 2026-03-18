@@ -4,41 +4,45 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// The Controller: bridges Logic and View layers.
+/// Thin wrapper: GameSession (logic) → BoardView (animations) + UI.
 ///
-/// Key design decisions (3B v2):
-///   - try/finally around all handlers to prevent _isBusy deadlock on exceptions
-///   - Combo explosions animated in parallel (Task.WhenAll)
-///   - Shared ProcessChainReactions() used by both rocket tap and combo
-///   - MaxChainDepth = 200 (covers a fully packed 10×10 board)
+/// Scene flow:
+///   MainScene → LevelButton tap → LevelScene loads → GameOrchestrator.Start()
+///   Win → CelebrationUI → MainScene
+///   Lose → FailPopupUI → Close (MainScene) or TryAgain (reload)
 /// </summary>
 public class GameOrchestrator : MonoBehaviour
 {
-    [Header("References")]
+    [Header("Core References")]
     [SerializeField] private BoardView _boardView;
     [SerializeField] private InputManager _inputManager;
 
-    private Board _board;
-    private MatchStrategy _matchStrategy;
-    private GravityProcessor _gravityProcessor;
-    private RocketProcessor _rocketProcessor;
-    private TapResolver _tapResolver;
-    private ObstacleGoalTracker _goalTracker;
-    private LevelData _currentLevel;
+    [Header("UI References")]
+    [SerializeField] private GameplayUI _gameplayUI;
+    [SerializeField] private FailPopupUI _failPopup;
+    [SerializeField] private CelebrationUI _celebrationUI;
 
-    private int _moveCount;
+    // --- Pure C# systems ---
+    private GameSession _session;
+    private LevelProgressionManager _progression;
+    private int _currentLevelNumber;
+
+    // --- State ---
     private bool _isBusy;
-    private bool _gameOver;
 
-    private const int MaxChainDepth = 200;
-
+    // --- Events (for any additional listeners) ---
     public event Action<int> OnMovesChanged;
     public event Action<ObstacleGoalTracker> OnGoalsUpdated;
     public event Action OnLevelWon;
     public event Action OnLevelFailed;
 
-    public int MovesRemaining => _moveCount;
-    public ObstacleGoalTracker GoalTracker => _goalTracker;
+    // --- Public accessors ---
+    public GameSession Session => _session;
+    public LevelProgressionManager Progression => _progression;
+
+    // ==========================================
+    // LIFECYCLE
+    // ==========================================
 
     private void OnEnable()
     {
@@ -52,79 +56,110 @@ public class GameOrchestrator : MonoBehaviour
             _inputManager.OnCubeTapped -= OnCellTapped;
     }
 
-    void Start() => LoadLevel(1);
-
-    public void LoadLevel(int levelNumber)
+    void Start()
     {
-        _gameOver = false;
-        _currentLevel = LevelParser.LoadLevel(levelNumber);
+        // Initialize progression
+        var persistence = new PlayerPrefsLevelPersistence();
+        int totalLevels = LevelParser.GetTotalLevelCount();
+        _progression = new LevelProgressionManager(persistence, totalLevels);
 
-        if (_currentLevel == null)
+        // Initialize fail popup
+        if (_failPopup != null)
+            _failPopup.Initialize(this);
+
+        // Load level
+        int levelToPlay = _progression.GetLevelToPlay();
+        if (levelToPlay == -1)
         {
-            Debug.LogError($"[GameOrchestrator] Failed to load level {levelNumber}. Falling back to random.");
-            _board = new Board(8, 10);
-            _board.InitializeRandom();
-            _moveCount = 25;
+            Debug.Log("[GameOrchestrator] All levels complete. Loading level 1 for testing.");
+            LoadLevel(1);
         }
         else
         {
-            _board = new Board(_currentLevel.grid_width, _currentLevel.grid_height);
-            _board.Initialize(_currentLevel);
-            _moveCount = _currentLevel.move_count;
+            LoadLevel(levelToPlay);
         }
-
-        _matchStrategy = new ClassicMatchStrategy();
-        _gravityProcessor = new GravityProcessor();
-        _rocketProcessor = new RocketProcessor();
-        _tapResolver = new TapResolver();
-        _goalTracker = new ObstacleGoalTracker();
-        _goalTracker.InitializeFromBoard(_board);
-
-        _boardView.Initialize(_board);
-        _isBusy = false;
-
-        RefreshHints();
-        OnMovesChanged?.Invoke(_moveCount);
-        OnGoalsUpdated?.Invoke(_goalTracker);
-
-        Debug.Log($"[GameOrchestrator] Level {levelNumber} loaded. " +
-                  $"Grid: {_board.Width}x{_board.Height}, Moves: {_moveCount}, " +
-                  $"Obstacles: {_goalTracker.GetTotalRemaining()}");
     }
 
     // ==========================================
-    // TAP DISPATCH
+    // LEVEL LOADING
+    // ==========================================
+
+    public void LoadLevel(int levelNumber)
+    {
+        _currentLevelNumber = levelNumber;
+
+        LevelData levelData = LevelParser.LoadLevel(levelNumber);
+        if (levelData == null)
+        {
+            Debug.LogError($"[GameOrchestrator] Failed to load level {levelNumber}.");
+            return;
+        }
+
+        _session = new GameSession(levelData);
+
+        // Build visual board
+        _boardView.Initialize(_session.Board);
+        _boardView.UpdateRocketHints(_session.GetHints());
+
+        // Initialize UI
+        if (_gameplayUI != null)
+        {
+            _gameplayUI.UpdateMoves(_session.MovesRemaining);
+            _gameplayUI.InitializeGoals(_session.GoalTracker);
+        }
+
+        _isBusy = false;
+
+        Debug.Log($"[GameOrchestrator] Level {levelNumber} loaded. " +
+                  $"Grid: {_session.Board.Width}x{_session.Board.Height}, " +
+                  $"Moves: {_session.MovesRemaining}, " +
+                  $"Obstacles: {_session.GoalTracker.GetTotalRemaining()}");
+    }
+
+    public void ReloadCurrentLevel()
+    {
+        LoadLevel(_currentLevelNumber);
+    }
+
+    // ==========================================
+    // TAP HANDLING
     // ==========================================
 
     public async void OnCellTapped(Coordinate coord)
     {
-        if (_isBusy || _gameOver || _moveCount <= 0)
-            return;
+        if (_isBusy) return;
+        if (_session == null || _session.State != GameSessionState.Playing) return;
 
-        TapResult tapResult = _tapResolver.Resolve(_board, coord, _matchStrategy);
+        TurnResult turnResult = _session.ProcessTap(coord);
+        if (!turnResult.IsValid) return;
 
-        // try/finally prevents _isBusy deadlock if any animation throws
+        _isBusy = true;
+
         try
         {
-            switch (tapResult.Action)
+            // 1. Animate all steps
+            await AnimateTurnSteps(turnResult);
+
+            // 2. Update hints
+            _boardView.UpdateRocketHints(turnResult.HintData);
+
+            // 3. Update UI
+            if (_gameplayUI != null)
             {
-                case TapAction.BlastGroup:
-                    await HandleBlastGroup(tapResult);
-                    break;
-                case TapAction.ExplodeRocket:
-                    await HandleExplodeRocket(tapResult);
-                    break;
-                case TapAction.RocketCombo:
-                    await HandleRocketCombo(tapResult);
-                    break;
-                case TapAction.None:
-                default:
-                    return; // No move spent, no _isBusy set
+                _gameplayUI.UpdateMoves(turnResult.MovesRemaining);
+                _gameplayUI.UpdateGoals(_session.GoalTracker);
             }
+
+            // 4. Notify listeners
+            OnMovesChanged?.Invoke(turnResult.MovesRemaining);
+            OnGoalsUpdated?.Invoke(_session.GoalTracker);
+
+            // 5. Handle win/lose
+            HandleGameState(turnResult.StateAfterTurn);
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[GameOrchestrator] Exception during tap handling: {ex}");
+            Debug.LogError($"[GameOrchestrator] Exception during turn: {ex}");
         }
         finally
         {
@@ -133,190 +168,87 @@ public class GameOrchestrator : MonoBehaviour
     }
 
     // ==========================================
-    // BLAST GROUP
+    // STEP ANIMATION DISPATCHER
     // ==========================================
 
-    private async Task HandleBlastGroup(TapResult tapResult)
+    private async Task AnimateTurnSteps(TurnResult turnResult)
     {
-        _isBusy = true;
-        _moveCount--;
-        OnMovesChanged?.Invoke(_moveCount);
-
-        List<Coordinate> matches = tapResult.MatchedCoordinates;
-        Coordinate tapped = tapResult.TappedCoord;
-        bool createsRocket = _rocketProcessor.QualifiesForRocket(matches.Count);
-
-        BlastResult blastResult = _matchStrategy.Blast(_board, matches, tapped);
-        UpdateGoalTrackerFromBlast(blastResult);
-
-        if (createsRocket)
+        foreach (var step in turnResult.Steps)
         {
-            await _boardView.AnimateRocketCreation(blastResult, tapped);
-            RocketCreationData rocketData = _rocketProcessor.CreateRocket(_board, tapped, matches);
-            _boardView.SpawnRocketVisual(rocketData);
+            switch (step.Type)
+            {
+                case TurnStepType.Blast:
+                    await _boardView.AnimateBlast(step.BlastData);
+                    break;
+
+                case TurnStepType.BlastForRocket:
+                    await _boardView.AnimateRocketCreation(step.BlastData);
+                    break;
+
+                case TurnStepType.RocketCreated:
+                    _boardView.SpawnRocketVisual(step.RocketCreationData);
+                    await Task.Delay(200);
+                    break;
+
+                case TurnStepType.RocketExplosion:
+                    await _boardView.AnimateRocketExplosion(step.ExplosionData);
+                    break;
+
+                case TurnStepType.ComboExplosion:
+                    await AnimateComboExplosions(step.ComboExplosionData);
+                    break;
+
+                case TurnStepType.Gravity:
+                    await _boardView.AnimateGravity(step.GravityData);
+                    break;
+
+                case TurnStepType.Refill:
+                    await _boardView.AnimateRefill(step.RefillData);
+                    break;
+
+                case TurnStepType.UpdateDamagedSprites:
+                    _boardView.UpdateDamagedSprites(_session.Board, step.DamagedSpritesToUpdate);
+                    break;
+            }
         }
-        else
+    }
+
+    private async Task AnimateComboExplosions(List<RocketExplosionData> explosions)
+    {
+        List<Task> tasks = new List<Task>();
+        foreach (var data in explosions)
+            tasks.Add(_boardView.AnimateRocketExplosion(data));
+        await Task.WhenAll(tasks);
+    }
+
+    // ==========================================
+    // GAME STATE → UI
+    // ==========================================
+
+    private void HandleGameState(GameSessionState state)
+    {
+        switch (state)
         {
-            await _boardView.AnimateBlast(blastResult);
+            case GameSessionState.Won:
+                Debug.Log("[GameOrchestrator] LEVEL WON!");
+                _progression.AdvanceLevel();
+                OnLevelWon?.Invoke();
+
+                if (_celebrationUI != null)
+                    _celebrationUI.PlayCelebration();
+                else
+                    Debug.LogWarning("[GameOrchestrator] No CelebrationUI assigned.");
+                break;
+
+            case GameSessionState.Lost:
+                Debug.Log("[GameOrchestrator] LEVEL FAILED!");
+                OnLevelFailed?.Invoke();
+
+                if (_failPopup != null)
+                    _failPopup.Show();
+                else
+                    Debug.LogWarning("[GameOrchestrator] No FailPopupUI assigned.");
+                break;
         }
-
-        _boardView.UpdateDamagedSprites(_board, blastResult.DamagedObstacles);
-
-        await SettleBoard();
-        CheckGameState();
-    }
-
-    // ==========================================
-    // SINGLE ROCKET EXPLOSION + CHAIN REACTIONS
-    // ==========================================
-
-    private async Task HandleExplodeRocket(TapResult tapResult)
-    {
-        _isBusy = true;
-        _moveCount--;
-        OnMovesChanged?.Invoke(_moveCount);
-
-        Queue<Coordinate> pending = new Queue<Coordinate>();
-        pending.Enqueue(tapResult.TappedCoord);
-
-        await ProcessChainReactions(pending);
-        await SettleBoard();
-        CheckGameState();
-    }
-
-    // ==========================================
-    // ROCKET COMBO + CHAIN REACTIONS
-    // ==========================================
-
-    private async Task HandleRocketCombo(TapResult tapResult)
-    {
-        _isBusy = true;
-        _moveCount--;
-        OnMovesChanged?.Invoke(_moveCount);
-
-        // 1. Process combo logic
-        List<RocketExplosionData> comboExplosions = _rocketProcessor.ProcessCombo(
-            _board, tapResult.TappedCoord, tapResult.AdjacentRockets);
-
-        // 2. Animate ALL combo explosions in PARALLEL
-        List<Task> animTasks = new List<Task>();
-        Queue<Coordinate> pendingChains = new Queue<Coordinate>();
-
-        foreach (var explosionData in comboExplosions)
-        {
-            UpdateGoalTrackerFromExplosion(explosionData);
-            animTasks.Add(_boardView.AnimateRocketExplosion(explosionData));
-
-            foreach (var triggered in explosionData.TriggeredRockets)
-                pendingChains.Enqueue(triggered);
-        }
-
-        await Task.WhenAll(animTasks);
-
-        // 3. Update damaged sprites after all combo anims complete
-        foreach (var explosionData in comboExplosions)
-            _boardView.UpdateDamagedSprites(_board, explosionData.DamagedObstacles);
-
-        // 4. Process chain reactions from combo
-        await ProcessChainReactions(pendingChains);
-
-        await SettleBoard();
-        CheckGameState();
-    }
-
-    // ==========================================
-    // CHAIN REACTION QUEUE
-    // ==========================================
-
-    /// <summary>
-    /// Queue-based chain reaction loop.
-    ///
-    /// Key invariant: Triggered rockets are still ON the board when enqueued.
-    /// ExplodeRocket() removes them when it's their turn.
-    /// If a rocket was already removed by a prior chain step, the IsRocket
-    /// check safely skips it (returns null from ExplodeRocket).
-    /// </summary>
-    private async Task ProcessChainReactions(Queue<Coordinate> pending)
-    {
-        int chainCount = 0;
-
-        while (pending.Count > 0 && chainCount < MaxChainDepth)
-        {
-            Coordinate rocketCoord = pending.Dequeue();
-            chainCount++;
-
-            // ExplodeRocket checks IsRocket internally — returns null if cell
-            // is empty (already fired by a prior chain step) or not a rocket
-            RocketExplosionData explosionData = _rocketProcessor.ExplodeRocket(_board, rocketCoord);
-            if (explosionData == null)
-                continue;
-
-            UpdateGoalTrackerFromExplosion(explosionData);
-
-            await _boardView.AnimateRocketExplosion(explosionData);
-            _boardView.UpdateDamagedSprites(_board, explosionData.DamagedObstacles);
-
-            foreach (var triggered in explosionData.TriggeredRockets)
-                pending.Enqueue(triggered);
-        }
-
-        if (chainCount >= MaxChainDepth)
-            Debug.LogWarning("[GameOrchestrator] Chain reaction hit safety limit!");
-    }
-
-    // ==========================================
-    // SHARED
-    // ==========================================
-
-    private async Task SettleBoard()
-    {
-        var gravityMovements = _gravityProcessor.ApplyGravity(_board);
-        await _boardView.AnimateGravity(gravityMovements);
-
-        var refillMovements = _gravityProcessor.FillEmptySpaces(_board);
-        await _boardView.AnimateRefill(refillMovements);
-
-        RefreshHints();
-    }
-
-    private void RefreshHints()
-    {
-        var hintData = HintCalculator.FindRocketHints(_board);
-        _boardView.UpdateRocketHints(hintData);
-    }
-
-    private void UpdateGoalTrackerFromBlast(BlastResult result)
-    {
-        foreach (var info in result.DestroyedObstacleInfos)
-            _goalTracker.OnObstacleDestroyed(info.ObstacleId);
-        OnGoalsUpdated?.Invoke(_goalTracker);
-    }
-
-    private void UpdateGoalTrackerFromExplosion(RocketExplosionData data)
-    {
-        foreach (var info in data.DestroyedObstacleInfos)
-            _goalTracker.OnObstacleDestroyed(info.ObstacleId);
-        OnGoalsUpdated?.Invoke(_goalTracker);
-    }
-
-    private void CheckGameState()
-    {
-        if (_board.AreAllObstaclesCleared())
-        {
-            _gameOver = true;
-            Debug.Log("[GameOrchestrator] LEVEL WON!");
-            OnLevelWon?.Invoke();
-            return;
-        }
-
-        if (_moveCount <= 0)
-        {
-            _gameOver = true;
-            Debug.Log("[GameOrchestrator] LEVEL FAILED — no moves remaining.");
-            OnLevelFailed?.Invoke();
-            return;
-        }
-
-        Debug.Log($"[GameOrchestrator] Moves: {_moveCount}, Obstacles: {_goalTracker.GetTotalRemaining()}");
     }
 }
