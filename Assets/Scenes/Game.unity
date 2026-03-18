@@ -212,6 +212,10 @@ MonoBehaviour:
   _redSprite: {fileID: 8166710274925509176, guid: 096005572c55275ee827280c56cf195b, type: 3}
   _yellowSprite: {fileID: -8425141836431729757, guid: 1c8000046499ba73fbb8e64e301362ed, type: 3}
   _greenSprite: {fileID: -6099873399732076034, guid: a7538e477175a02cc8e85a90b08a6204, type: 3}
+  _redRocketHint: {fileID: -4162601588504768772, guid: c3d969903065a4b329acf8bf0cd9887e, type: 3}
+  _blueRocketHint: {fileID: 8853254876290271475, guid: f08f4dfb9d4eb8a30be86b8825a7b443, type: 3}
+  _greenRocketHint: {fileID: -8149426069742796037, guid: 458e74c292c6f8946aea6757073d08a1, type: 3}
+  _yellowRocketHint: {fileID: 6090080599973395561, guid: 0738a4a547c39d3378bb786ba4652451, type: 3}
   _boxSprite: {fileID: 7499154508442906066, guid: d555b91bfcd685e9394e0911cea759ea, type: 3}
   _stoneSprite: {fileID: 5725184139431673129, guid: 22efabdf4d953897baaea617f1c21aa8, type: 3}
   _vaseSprite: {fileID: -4678962038349899921, guid: 1a5904058f78ff24e9c554e68028c413, type: 3}

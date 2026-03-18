@@ -1,2 +1,22 @@
 fileFormatVersion: 2
 guid: 52554803146090bd2bc8f9c9a8701f84
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - _cubePrefab: {fileID: 6601651771836891473, guid: 5ad36df07600fb39f94f1ea3ca63b698, type: 3}
+  - _blueSprite: {instanceID: 0}
+  - _redSprite: {instanceID: 0}
+  - _yellowSprite: {instanceID: 0}
+  - _greenSprite: {instanceID: 0}
+  - _boxSprite: {instanceID: 0}
+  - _stoneSprite: {instanceID: 0}
+  - _vaseSprite: {instanceID: 0}
+  - _vaseDamagedSprite: {instanceID: 0}
+  - _verticalRocketSprite: {instanceID: 0}
+  - _horizontalRocketSprite: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
