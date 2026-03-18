@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// The View layer: a "puppet stage" that visually reflects the Board's logical state.
+/// The View layer: visually reflects the Board's logical state.
 /// Knows nothing about game rules — only receives instructions from the Orchestrator.
 /// </summary>
 public class BoardView : MonoBehaviour
@@ -21,13 +21,12 @@ public class BoardView : MonoBehaviour
     [SerializeField] private Sprite _boxSprite;
     [SerializeField] private Sprite _stoneSprite;
     [SerializeField] private Sprite _vaseSprite;
-    [SerializeField] private Sprite _vaseDamagedSprite; // Vase at 1 HP
+    [SerializeField] private Sprite _vaseDamagedSprite;
 
     [Header("Rocket Sprites")]
     [SerializeField] private Sprite _verticalRocketSprite;
     [SerializeField] private Sprite _horizontalRocketSprite;
 
-    // Active visuals indexed by grid coordinate
     private Dictionary<Coordinate, CubeView> _activeCubes = new Dictionary<Coordinate, CubeView>();
     private float _offsetX;
     private float _offsetY;
@@ -36,7 +35,7 @@ public class BoardView : MonoBehaviour
 
     public void Initialize(Board board)
     {
-        // Destroy any existing cubes from a previous level
+        // Clear previous level
         foreach (var kvp in _activeCubes)
         {
             if (kvp.Value != null)
@@ -44,7 +43,6 @@ public class BoardView : MonoBehaviour
         }
         _activeCubes.Clear();
 
-        // Center the grid on screen
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
 
@@ -56,7 +54,7 @@ public class BoardView : MonoBehaviour
                 GridItem item = board.GetItem(coord);
 
                 if (item.IsEmpty)
-                    continue; // Don't spawn a visual for empty cells
+                    continue;
 
                 SpawnCube(coord, item.Id);
             }
@@ -69,17 +67,28 @@ public class BoardView : MonoBehaviour
     {
         return itemId switch
         {
-            ItemIds.Blue => _blueSprite,
-            ItemIds.Red => _redSprite,
+            ItemIds.Blue   => _blueSprite,
+            ItemIds.Red    => _redSprite,
             ItemIds.Yellow => _yellowSprite,
-            ItemIds.Green => _greenSprite,
-            ItemIds.Box => _boxSprite,
-            ItemIds.Stone => _stoneSprite,
-            ItemIds.Vase => _vaseSprite,
-            ItemIds.VerticalRocket => _verticalRocketSprite,
+            ItemIds.Green  => _greenSprite,
+            ItemIds.Box    => _boxSprite,
+            ItemIds.Stone  => _stoneSprite,
+            ItemIds.Vase   => _vaseSprite,
+            ItemIds.VerticalRocket   => _verticalRocketSprite,
             ItemIds.HorizontalRocket => _horizontalRocketSprite,
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Get the correct sprite for a vase based on remaining health.
+    /// Full health → normal sprite, damaged → cracked sprite.
+    /// </summary>
+    private Sprite GetVaseSprite(int health)
+    {
+        if (health <= 1 && _vaseDamagedSprite != null)
+            return _vaseDamagedSprite;
+        return _vaseSprite;
     }
 
     // --- Spawning ---
@@ -105,6 +114,29 @@ public class BoardView : MonoBehaviour
         return new Vector3(coord.x - _offsetX, coord.y - _offsetY, 0);
     }
 
+    // --- Sprite Updates (called by Orchestrator after damage) ---
+
+    /// <summary>
+    /// After a blast, update sprites for obstacles that took damage but survived.
+    /// Queries the Board for current health to determine correct visual.
+    /// </summary>
+    public void UpdateDamagedSprites(Board board, List<Coordinate> damagedCoords)
+    {
+        foreach (var coord in damagedCoords)
+        {
+            if (!_activeCubes.TryGetValue(coord, out var cubeView))
+                continue;
+
+            GridItem item = board.GetItem(coord);
+
+            if (item.Id == ItemIds.Vase)
+            {
+                cubeView.SetSprite(GetVaseSprite(item.Health));
+            }
+            // Future: other obstacle visual states can be added here
+        }
+    }
+
     // --- Animation: Blast ---
 
     public async Task AnimateBlast(BlastResult result)
@@ -121,12 +153,12 @@ public class BoardView : MonoBehaviour
             }
         }
 
-        // 2. Shake damaged obstacles (survived, visual feedback)
+        // 2. Shake damaged obstacles
         foreach (var coord in result.DamagedObstacles)
         {
             if (_activeCubes.TryGetValue(coord, out var cube))
             {
-                tasks.Add(PlayDamageAnimation(cube, coord));
+                tasks.Add(PlayDamageShake(cube));
             }
         }
 
@@ -135,7 +167,7 @@ public class BoardView : MonoBehaviour
         {
             if (_activeCubes.TryGetValue(coord, out var cube))
             {
-                tasks.Add(PlayPopAnimation(cube));
+                tasks.Add(PlayObstacleDestroyAnimation(cube));
                 _activeCubes.Remove(coord);
             }
         }
@@ -170,7 +202,6 @@ public class BoardView : MonoBehaviour
 
         foreach (var move in newItems)
         {
-            // Spawn above the board at the calculated start position
             Vector3 spawnWorldPos = GridToWorld(move.StartPos);
             GameObject go = Instantiate(_cubePrefab, spawnWorldPos, Quaternion.identity, transform);
 
@@ -196,10 +227,8 @@ public class BoardView : MonoBehaviour
         while (elapsed < duration)
         {
             if (cube == null) return;
-
             float t = elapsed / duration;
-            // Simple ease-in for a snappier feel
-            t = t * t;
+            t = t * t; // Ease-in
             cube.transform.position = Vector3.Lerp(startPos, endPos, t);
             elapsed += Time.deltaTime;
             await Task.Yield();
@@ -215,46 +244,43 @@ public class BoardView : MonoBehaviour
     private async Task PlayPopAnimation(CubeView cube)
     {
         if (cube == null) return;
-
-        // Quick scale-up then destroy
         cube.transform.localScale = Vector3.one * 1.2f;
         await Task.Delay(80);
-
-        if (cube != null)
-            Destroy(cube.gameObject);
+        if (cube != null) Destroy(cube.gameObject);
     }
 
-    private async Task PlayDamageAnimation(CubeView cube, Coordinate coord)
+    private async Task PlayObstacleDestroyAnimation(CubeView cube)
     {
         if (cube == null) return;
 
-        // Simple shake: offset left-right rapidly
+        // Slightly different from cube pop: flash white then shrink
+        cube.transform.localScale = Vector3.one * 1.1f;
+        await Task.Delay(60);
+
+        if (cube == null) return;
+        cube.transform.localScale = Vector3.one * 0.5f;
+        await Task.Delay(60);
+
+        if (cube != null) Destroy(cube.gameObject);
+    }
+
+    private async Task PlayDamageShake(CubeView cube)
+    {
+        if (cube == null) return;
+
         Vector3 original = cube.transform.position;
-        float shakeMagnitude = 0.08f;
+        float mag = 0.08f;
 
         for (int i = 0; i < 4; i++)
         {
             if (cube == null) return;
-            cube.transform.position = original + Vector3.right * shakeMagnitude;
+            cube.transform.position = original + Vector3.right * mag;
             await Task.Delay(30);
             if (cube == null) return;
-            cube.transform.position = original - Vector3.right * shakeMagnitude;
+            cube.transform.position = original - Vector3.right * mag;
             await Task.Delay(30);
         }
 
-        if (cube != null)
-        {
-            cube.transform.position = original;
-
-            // If it's a damaged vase, swap to cracked sprite
-            // (We check the sprite field exists to avoid null refs during early dev)
-            if (_vaseDamagedSprite != null)
-            {
-                // The orchestrator has already decremented health on the GridItem,
-                // but we can't easily query it here. For now, always swap on damage.
-                // A more robust approach: pass item state in the BlastResult.
-                // TODO: Refine in Iteration 2 when obstacle visuals are polished.
-            }
-        }
+        if (cube != null) cube.transform.position = original;
     }
 }

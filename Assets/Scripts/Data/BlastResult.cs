@@ -1,23 +1,42 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// DTO: Result of a blast operation, passed from Logic to Orchestrator.
-/// Contains everything the Orchestrator needs to drive animations and check state.
+/// DTO: Complete result of a blast operation.
+/// Passed from Logic → Orchestrator → View.
 /// </summary>
 public class BlastResult
 {
     public bool IsValid;
     public List<Coordinate> BlastedCoordinates;
-    public List<Coordinate> DamagedObstacles; // Obstacles that took damage but survived
-    public List<Coordinate> DestroyedObstacles; // Obstacles that were killed
+    public List<Coordinate> DamagedObstacles;       // Survived but took damage
+    public List<Coordinate> DestroyedObstacles;      // Killed this blast
+    public List<DestroyedObstacleInfo> DestroyedObstacleInfos; // Type info for GoalTracker
     public int RemainingMoves;
-    public bool ShouldCreateRocket; // True if group count >= 4
-    public Coordinate RocketSpawnPosition; // The tapped cell (where rocket appears)
+    public bool ShouldCreateRocket;
+    public Coordinate RocketSpawnPosition;
 
     public BlastResult()
     {
         BlastedCoordinates = new List<Coordinate>();
         DamagedObstacles = new List<Coordinate>();
         DestroyedObstacles = new List<Coordinate>();
+        DestroyedObstacleInfos = new List<DestroyedObstacleInfo>();
+    }
+}
+
+/// <summary>
+/// Records what type of obstacle was destroyed and where.
+/// Needed because the board cell is already cleared to Empty
+/// by the time the GoalTracker needs to update counts.
+/// </summary>
+public struct DestroyedObstacleInfo
+{
+    public Coordinate Position;
+    public string ObstacleId;
+
+    public DestroyedObstacleInfo(Coordinate position, string obstacleId)
+    {
+        Position = position;
+        ObstacleId = obstacleId;
     }
 }

@@ -3,10 +3,11 @@ using System.Collections.Generic;
 /// <summary>
 /// Standard Match-2 blast rules as defined in the Case Study:
 /// - At least 2 adjacent same-color cubes to blast
-/// - Adjacent obstacles (Box, Vase) take damage from blasts
-/// - Stone only takes damage from Rockets (not blasts)
-/// - Vase takes max 1 damage per blast group
 /// - Group >= 4 triggers Rocket creation
+/// - Damage to adjacent obstacles is delegated to DamageResolver
+///
+/// This class owns: match-finding and blast execution.
+/// This class does NOT own: damage rules (that's DamageResolver's job).
 /// </summary>
 public class ClassicMatchStrategy : MatchStrategy
 {
@@ -46,20 +47,14 @@ public class ClassicMatchStrategy : MatchStrategy
             board.SetItem(coord, ItemFactory.CreateEmpty());
         }
 
-        // 2. Deal adjacent damage to obstacles
-        //    We track which obstacles we've already damaged this blast
-        //    (Vase rule: max 1 damage per blast group)
-        HashSet<Coordinate> alreadyDamaged = new HashSet<Coordinate>();
-
-        foreach (var coord in matches)
-        {
-            DamageAdjacentObstacles(board, coord, alreadyDamaged, result);
-        }
+        // 2. Delegate adjacent damage to DamageResolver
+        //    This single call handles Box, Stone immunity, Vase cap — everything.
+        DamageResolver.ProcessAdjacentDamage(board, matches, DamageSource.Blast, result);
 
         return result;
     }
 
-    // --- Private helpers ---
+    // --- Private ---
 
     private void FloodFill(
         Board board,
@@ -75,63 +70,15 @@ public class ClassicMatchStrategy : MatchStrategy
 
         GridItem item = board.GetItem(current);
 
-        // Must be the same color cube
         if (item.Id != targetId)
             return;
 
         visited[current.x, current.y] = true;
         found.Add(current);
 
-        // 4-directional neighbors
         FloodFill(board, found, new Coordinate(current.x, current.y + 1), targetId, visited);
         FloodFill(board, found, new Coordinate(current.x, current.y - 1), targetId, visited);
         FloodFill(board, found, new Coordinate(current.x + 1, current.y), targetId, visited);
         FloodFill(board, found, new Coordinate(current.x - 1, current.y), targetId, visited);
-    }
-
-    private void DamageAdjacentObstacles(
-        Board board,
-        Coordinate blastCell,
-        HashSet<Coordinate> alreadyDamaged,
-        BlastResult result)
-    {
-        Coordinate[] neighbors =
-        {
-            new Coordinate(blastCell.x, blastCell.y + 1),
-            new Coordinate(blastCell.x, blastCell.y - 1),
-            new Coordinate(blastCell.x + 1, blastCell.y),
-            new Coordinate(blastCell.x - 1, blastCell.y)
-        };
-
-        foreach (var neighbor in neighbors)
-        {
-            if (!board.IsValidCoordinate(neighbor.x, neighbor.y))
-                continue;
-            if (alreadyDamaged.Contains(neighbor))
-                continue;
-
-            GridItem item = board.GetItem(neighbor);
-
-            if (!item.IsObstacle || !item.IsAlive)
-                continue;
-
-            // Stone is immune to blast damage (only rockets can hurt it)
-            if (item.Id == ItemIds.Stone)
-                continue;
-
-            // Deal damage
-            alreadyDamaged.Add(neighbor);
-            bool destroyed = item.TakeDamage(1);
-
-            if (destroyed)
-            {
-                board.SetItem(neighbor, ItemFactory.CreateEmpty());
-                result.DestroyedObstacles.Add(neighbor);
-            }
-            else
-            {
-                result.DamagedObstacles.Add(neighbor);
-            }
-        }
     }
 }
