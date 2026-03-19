@@ -46,8 +46,7 @@ public class BoardView : MonoBehaviour
     [SerializeField] private Sprite _verticalPartTopSprite;
     [SerializeField] private Sprite _verticalPartBottomSprite;
 
-    [Header("Background")]
-    [SerializeField] private SpriteRenderer _levelBackground;
+
 
     // --- Animation Tuning ---
     private const float POP_DURATION = 0.15f;
@@ -229,21 +228,7 @@ public class BoardView : MonoBehaviour
         float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
 
-        // Scale background to fill camera view
-        if (_levelBackground != null && _levelBackground.sprite != null)
-        {
-            float cameraHeight = Camera.main.orthographicSize * 2f;
-            float cameraWidth = cameraHeight * Camera.main.aspect;
-            Vector2 spriteSize = _levelBackground.sprite.bounds.size;
 
-            float fillScale = Mathf.Max(cameraWidth / spriteSize.x, cameraHeight / spriteSize.y);
-            _levelBackground.transform.localScale = new Vector3(fillScale, fillScale, 1f);
-            _levelBackground.transform.position = new Vector3(
-                Camera.main.transform.position.x,
-                Camera.main.transform.position.y,
-                1f
-            );
-        }
     }
 
     // ==========================================

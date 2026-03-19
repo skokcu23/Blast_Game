@@ -1,24 +1,24 @@
 using UnityEngine;
+using DG.Tweening;
 
 /// <summary>
 /// Visual representation of a single grid cell.
-/// A "puppet" — it holds a sprite, its grid coordinate, and an optional hint overlay.
-/// All movement and lifecycle is controlled by BoardView.
+/// Hint system: swaps between default sprite and rocket-state sprite
+/// (same approach as Toon Blast — full cube visual changes, no overlay).
 /// </summary>
 public class CubeView : MonoBehaviour
 {
     [SerializeField] private SpriteRenderer _spriteRenderer;
 
-    [Header("Hint Overlay (optional)")]
-    [SerializeField] private SpriteRenderer _hintOverlay;
+    private Sprite _defaultSprite;
 
     public Coordinate GridCoordinate { get; private set; }
 
     public void Setup(Coordinate coord, Sprite sprite)
     {
         _spriteRenderer.sprite = sprite;
+        _defaultSprite = sprite;
         UpdateCoordinate(coord);
-        SetHintVisible(false);
     }
 
     public void UpdateCoordinate(Coordinate newCoord)
@@ -34,29 +34,37 @@ public class CubeView : MonoBehaviour
     }
 
     /// <summary>
-    /// Show or hide the rocket hint overlay on this cell.
+    /// Revert to the default (non-hint) sprite.
     /// </summary>
     public void SetHintVisible(bool visible)
     {
-        if (_hintOverlay != null)
-            _hintOverlay.gameObject.SetActive(visible);
+        if (!visible && _spriteRenderer != null && _defaultSprite != null)
+        {
+            _spriteRenderer.sprite = _defaultSprite;
+
+            // Quick punch so the swap doesn't feel instant
+            DOTween.Kill(transform, "hint");
+            transform.DOPunchScale(Vector3.one * 0.08f, 0.2f, 1, 0)
+                .SetId("hint");
+        }
     }
 
-    /// <summary>
-    /// Show the hint overlay with a specific sprite (color-matched rocket icon).
-    /// </summary>
-    public void SetHintSprite(Sprite sprite)
+    public void SetHintSprite(Sprite rocketStateSprite)
     {
-        if (_hintOverlay == null) return;
+        if (_spriteRenderer == null) return;
 
-        if (sprite != null)
+        if (rocketStateSprite != null)
         {
-            _hintOverlay.sprite = sprite;
-            _hintOverlay.gameObject.SetActive(true);
+            _spriteRenderer.sprite = rocketStateSprite;
+
+            // Pop in: scale up slightly then settle
+            DOTween.Kill(transform, "hint");
+            transform.DOPunchScale(Vector3.one * 0.12f, 0.25f, 1, 0)
+                .SetId("hint");
         }
-        else
+        else if (_defaultSprite != null)
         {
-            _hintOverlay.gameObject.SetActive(false);
+            _spriteRenderer.sprite = _defaultSprite;
         }
     }
 }
