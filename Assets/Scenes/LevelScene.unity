@@ -1499,6 +1499,7 @@ MonoBehaviour:
   _horizontalPartRightSprite: {fileID: -4731576832940087401, guid: e2786fdded3b92f8598274141d78dee8, type: 3}
   _verticalPartTopSprite: {fileID: 51141016974189086, guid: 50b47ecaae6fadc52bc40d04bd4970a7, type: 3}
   _verticalPartBottomSprite: {fileID: -4697989437084310921, guid: 162f963d615d56ed4a78b204e8d41803, type: 3}
+  _levelBackground: {fileID: 0}
 --- !u!4 &946308033
 Transform:
   m_ObjectHideFlags: 0
