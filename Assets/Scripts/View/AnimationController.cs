@@ -396,8 +396,10 @@ public class AnimationController
     // DAMAGED SPRITES (vase cracking)
     // ==========================================
 
-    public void PlayDamagedSprites(Board board, List<Coordinate> damagedCoords)
+    public async Task PlayDamagedSprites(Board board, List<Coordinate> damagedCoords)
     {
+        Sequence seq = DOTween.Sequence();
+
         foreach (var coord in damagedCoords)
         {
             CubeView view = _gridState.GetCell(coord);
@@ -407,35 +409,40 @@ public class AnimationController
             if (item.Id == ItemIds.Vase)
             {
                 Sprite newSprite = _boardView.GetVaseSprite(item.Health);
+                CubeView captured = view;
+                Coordinate capturedCoord = coord;
 
-                // Squash animation — swap sprite at the squeeze peak
-                Sequence seq = DOTween.Sequence();
+                Sequence vaseSeq = DOTween.Sequence();
 
-                seq.Append(view.transform
+                vaseSeq.Append(view.transform
                     .DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
                     .SetEase(Ease.OutQuad));
 
-                CubeView captured = view;
-                Coordinate capturedCoord = coord;
-                seq.AppendCallback(() =>
+                vaseSeq.AppendCallback(() =>
                 {
                     if (captured != null)
                         _gridState.UpdateSprite(capturedCoord, newSprite);
                 });
 
-                seq.Append(view.transform
+                vaseSeq.Append(view.transform
                     .DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
                     .SetEase(Ease.OutQuad));
 
-                seq.Append(view.transform
+                vaseSeq.Append(view.transform
                     .DOScale(BoardView.CellScale, 0.12f)
                     .SetEase(Ease.OutBounce));
 
-                seq.Join(view.transform
+                vaseSeq.Join(view.transform
                     .DOShakePosition(0.15f, 0.06f, 8, 90, false, true, ShakeRandomnessMode.Harmonic));
+
+                seq.Join(vaseSeq); // All vases animate in parallel
             }
         }
+
+        if (seq.Duration() > 0)
+            await seq.ToTask();
     }
+
 
     // ==========================================
     // TWEEN FACTORIES

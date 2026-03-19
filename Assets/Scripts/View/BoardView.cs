@@ -136,9 +136,9 @@ public class BoardView : MonoBehaviour
         await _animator.PlayRefill(newItems);
     }
 
-    public void UpdateDamagedSprites(Board board, List<Coordinate> damagedCoords)
+    public async Task UpdateDamagedSprites(Board board, List<Coordinate> damagedCoords)
     {
-        _animator.PlayDamagedSprites(board, damagedCoords);
+        await _animator.PlayDamagedSprites(board, damagedCoords);
     }
 
     public void ReconcileWithBoard(Board board)

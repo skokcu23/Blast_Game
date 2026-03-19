@@ -197,7 +197,7 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.UpdateDamagedSprites:
-                    _boardView.UpdateDamagedSprites(_session.Board, step.DamagedSpritesToUpdate);
+                    await _boardView.UpdateDamagedSprites(_session.Board, step.DamagedSpritesToUpdate);
                     break;
             }
         }
