@@ -1,69 +1,77 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 using DG.Tweening;
 
 /// <summary>
-/// Win celebration: plays particles, fades dark overlay, then loads MainScene.
-///
-/// Fix: gameObject.SetActive(true) called BEFORE StartCoroutine.
-/// Uses DOTween for smooth overlay fade.
+/// Win celebration: shows "Level Completed!" text with animation,
+/// fades screen dark, then loads MainScene.
 /// </summary>
 public class CelebrationUI : MonoBehaviour
 {
-    [Header("Celebration")]
-    [SerializeField] private ParticleSystem _celebrationParticles;
-    [SerializeField] private float _celebrationDuration = 2.5f;
-    [SerializeField] private float _delayBeforeScene = 1.0f;
-
     [Header("Overlay")]
-    [SerializeField] private CanvasGroup _overlayGroup;
+    [SerializeField] private Image _fadeImage;
+
+    [Header("Win Text (optional)")]
+    [SerializeField] private TextMeshProUGUI _winText;
+
+    [Header("Timing")]
+    [SerializeField] private float _textAppearDelay = 0.3f;
+    [SerializeField] private float _fadeInDuration = 1.0f;
+    [SerializeField] private float _holdDuration = 1.5f;
 
     public void PlayCelebration()
     {
-        // MUST enable before starting coroutine
         gameObject.SetActive(true);
 
-        // Reset overlay
-        if (_overlayGroup != null)
-            _overlayGroup.alpha = 0f;
+        // Reset state
+        if (_fadeImage != null)
+        {
+            var c = _fadeImage.color;
+            c.a = 0f;
+            _fadeImage.color = c;
+        }
+
+        if (_winText != null)
+        {
+            _winText.transform.localScale = Vector3.zero;
+            _winText.gameObject.SetActive(false);
+        }
 
         StartCoroutine(CelebrationSequence());
     }
 
     private IEnumerator CelebrationSequence()
     {
-        // 1. Start particles
-        if (_celebrationParticles != null)
+        // 1. Quick semi-transparent overlay fade
+        if (_fadeImage != null)
         {
-            _celebrationParticles.gameObject.SetActive(true);
-            _celebrationParticles.Clear();
-            _celebrationParticles.Play();
+            _fadeImage.DOFade(0.5f, 0.4f).SetEase(Ease.InQuad);
         }
 
-        // 2. Fade in dark overlay using DOTween
-        if (_overlayGroup != null)
+        yield return new WaitForSeconds(_textAppearDelay);
+
+        // 2. Show win text with bounce-in
+        if (_winText != null)
         {
-            _overlayGroup.gameObject.SetActive(true);
-            _overlayGroup.alpha = 0f;
-            DOTween.To(() => _overlayGroup.alpha, x => _overlayGroup.alpha = x, 0.6f, 0.5f).SetEase(Ease.InOutQuad);
+            _winText.gameObject.SetActive(true);
+            _winText.transform.DOScale(Vector3.one, 0.5f).SetEase(Ease.OutBack);
         }
 
-        // 3. Wait for celebration
-        yield return new WaitForSeconds(_celebrationDuration);
+        yield return new WaitForSeconds(1.0f);
 
-        // 4. Fade out everything
-        if (_overlayGroup != null)
+        // 3. Full fade to black
+        if (_fadeImage != null)
         {
-            DOTween.To(() => _overlayGroup.alpha, x => _overlayGroup.alpha = x, 1f, 0.3f);
+            _fadeImage.DOFade(1f, _fadeInDuration).SetEase(Ease.InQuad);
         }
 
-        yield return new WaitForSeconds(_delayBeforeScene);
+        yield return new WaitForSeconds(_fadeInDuration + _holdDuration);
 
-        // 5. Clean up DOTween before scene change
+        // 4. Load MainScene
         DOTween.KillAll();
-
-        // 6. Load MainScene
         SceneManager.LoadScene("MainScene");
     }
 }

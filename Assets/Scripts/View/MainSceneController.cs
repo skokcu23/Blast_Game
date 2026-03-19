@@ -35,7 +35,7 @@ public class MainSceneController : MonoBehaviour
         // Disable button if all levels complete
         if (_progression.AllLevelsComplete)
         {
-            _levelButton.interactable = false;
+            _levelButton.onClick.RemoveAllListeners();
         }
     }
 

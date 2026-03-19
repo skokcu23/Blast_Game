@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 using DG.Tweening;
 
 /// <summary>
-/// Fail popup with DOTween scale-in animation.
+/// Fail popup with smooth DOTween animations.
 /// Close → MainScene, Try Again → reload level.
 /// </summary>
 public class FailPopupUI : MonoBehaviour
@@ -13,8 +13,11 @@ public class FailPopupUI : MonoBehaviour
     [SerializeField] private Button _closeButton;
     [SerializeField] private Button _tryAgainButton;
 
-    [Header("Optional Dark Background")]
-    [SerializeField] private CanvasGroup _dimBackground;
+    [Header("Dim Background")]
+    [SerializeField] private Image _dimBackground; // Full-screen semi-transparent black
+
+    [Header("Popup Body")]
+    [SerializeField] private RectTransform _popupBody; // The popup panel (not the full-screen container)
 
     private GameOrchestrator _orchestrator;
 
@@ -32,24 +35,44 @@ public class FailPopupUI : MonoBehaviour
     {
         gameObject.SetActive(true);
 
-        // Dim background fade in
+        // Fade in dim background
         if (_dimBackground != null)
         {
-            _dimBackground.alpha = 0f;
-            DOTween.To(() => _dimBackground.alpha, x => _dimBackground.alpha = x, 0.5f, 0.3f);
+            var c = _dimBackground.color;
+            c.a = 0f;
+            _dimBackground.color = c;
+            _dimBackground.DOFade(0.6f, 0.3f).SetEase(Ease.InQuad);
         }
 
-        // Popup scale-in with overshoot
-        transform.localScale = Vector3.zero;
-        transform.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack);
+        // Scale-in popup body with overshoot
+        if (_popupBody != null)
+        {
+            _popupBody.localScale = Vector3.zero;
+            _popupBody.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack);
+        }
     }
 
-    private void Hide()
+    private void Hide(System.Action onComplete = null)
     {
-        // Scale out then disable
-        transform.DOScale(Vector3.zero, 0.2f)
-            .SetEase(Ease.InQuad)
-            .OnComplete(() => gameObject.SetActive(false));
+        Sequence seq = DOTween.Sequence();
+
+        // Scale out popup
+        if (_popupBody != null)
+        {
+            seq.Join(_popupBody.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InQuad));
+        }
+
+        // Fade out dim background
+        if (_dimBackground != null)
+        {
+            seq.Join(_dimBackground.DOFade(0f, 0.2f));
+        }
+
+        seq.OnComplete(() =>
+        {
+            gameObject.SetActive(false);
+            onComplete?.Invoke();
+        });
     }
 
     private void OnCloseClicked()
@@ -60,10 +83,7 @@ public class FailPopupUI : MonoBehaviour
 
     private void OnTryAgainClicked()
     {
-        Hide();
-
-        // Small delay to let the animation play before reloading
-        DOVirtual.DelayedCall(0.25f, () =>
+        Hide(() =>
         {
             if (_orchestrator != null)
                 _orchestrator.ReloadCurrentLevel();
