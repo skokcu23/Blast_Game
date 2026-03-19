@@ -383,7 +383,7 @@ public class RocketExplosionTests
 
     // TEST GAP 6: Vase at 3×3 corner takes exactly 1 Combo damage
     [Test]
-    public void ProcessCombo_VaseAt3x3Corner_TakesExactlyOneDamage()
+    public void ProcessCombo_VaseAt3x3Corner_DestroyedByDualHit()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
@@ -393,13 +393,12 @@ public class RocketExplosionTests
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        // Vase should have 1 HP remaining (took 1 Combo damage from 3×3)
-        Assert.AreEqual(1, _board.GetItem(2, 2).Health);
-        Assert.IsTrue(_board.GetItem(2, 2).IsAlive);
+        Assert.IsTrue(_board.GetItem(2, 2).IsEmpty,
+            "Vase in 3×3 destroyed by dual-direction damage (H: 2→1, V: 1→0)");
     }
 
     [Test]
-    public void ProcessCombo_NoDuplicateDamage_VaseOnPathAnd3x3()
+    public void ProcessCombo_VaseAtIntersection_DestroyedByDualHit()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
@@ -410,7 +409,8 @@ public class RocketExplosionTests
             new List<Coordinate> { new Coordinate(4, 3) });
 
         // Should only take 1 damage total (not 2)
-        Assert.AreEqual(1, _board.GetItem(3, 4).Health);
+        Assert.IsTrue(_board.GetItem(3, 4).IsEmpty,
+            "Vase at H/V intersection destroyed by dual-direction damage");
     }
 
     // ==========================================

@@ -154,27 +154,27 @@ public class AnimationController
     // ROCKET EXPLOSION (single and combo)
     // ==========================================
 
+    // ==========================================
+    // Replace PlayRocketExplosion in AnimationController.cs
+    // with this method. Everything else stays the same.
+    // ==========================================
+
     public async Task PlayRocketExplosion(RocketExplosionData data)
     {
         // 1. Remove rocket at origin
         _gridState.RemoveCell(data.Origin);
 
-        // 1b. For combos: remove visuals that the logic actually destroyed
-        if (data.IsCombo)
+        // 1b. For combos: clear visuals for all 3×3 cells that the logic emptied.
+        //     This list is computed by ProcessCombo after all tracing finishes.
+        //     It includes: removed rockets, destroyed cubes, destroyed obstacles.
+        //     It does NOT include surviving damaged obstacles.
+        if (data.IsCombo && data.ComboAreaCleared != null)
         {
-            // Remove the origin (tapped rocket)
-            _gridState.RemoveCell(data.Origin);
-
-            // Remove destroyed cubes in 3×3 area
-            foreach (var coord in data.DestroyedCubes)
-                _gridState.RemoveCell(coord);
-
-            // Remove destroyed obstacles in 3×3 area
-            foreach (var coord in data.DestroyedObstacles)
+            foreach (var coord in data.ComboAreaCleared)
                 _gridState.RemoveCell(coord);
         }
 
-        // 2. Build destroyed set
+        // 2. Build destroyed set (for projectile path cell destruction)
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
         foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
         foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
@@ -200,13 +200,13 @@ public class AnimationController
         else
         { dirAx = 0; dirAy = -1; dirBx = 0; dirBy = 1; }
 
-        // 5. Animate based on mode
+        // 5. Animate
         if (data.IsCombo)
             await AnimateComboProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
         else
             await AnimateSingleProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
 
-        // 6. Cleanup remaining destroyed cells
+        // 6. Cleanup remaining
         foreach (var coord in allDestroyed)
             _gridState.RemoveCell(coord);
 
@@ -223,6 +223,8 @@ public class AnimationController
             await shakeSeq.ToTask();
         }
     }
+
+
 
     private async Task AnimateSingleProjectiles(
         RocketExplosionData data, Sprite spriteA, Sprite spriteB,
