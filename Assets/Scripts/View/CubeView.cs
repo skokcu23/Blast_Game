@@ -3,10 +3,14 @@ using DG.Tweening;
 
 /// <summary>
 /// Visual representation of a single grid cell.
-/// Simplified: stores data, renders sprite. No animation logic.
 ///
-/// Knows its ItemId so GridStateManager can compare against Board state.
-/// Knows its default sprite so hint system can swap and revert.
+/// Hint system: each CubeView owns its own hint state (_isHinted).
+/// ApplyHint/RemoveHint are idempotent — calling them when already
+/// in the target state is a no-op. No external tracking needed.
+///
+/// Sprite swap approach (Toon Blast style):
+///   Normal: blue sprite
+///   Hinted: blue_rocket sprite (full replacement, not overlay)
 /// </summary>
 public class CubeView : MonoBehaviour
 {
@@ -16,17 +20,26 @@ public class CubeView : MonoBehaviour
     public Coordinate GridCoordinate { get; private set; }
 
     private Sprite _defaultSprite;
+    private bool _isHinted;
+
+    // ==========================================
+    // LIFECYCLE
+    // ==========================================
 
     /// <summary>
     /// Configure this CubeView for a specific cell.
-    /// Called by GridStateManager when placing a cell.
+    /// Called by GridStateManager.PlaceCell.
     /// </summary>
     public void Configure(Coordinate coord, Sprite sprite, string itemId)
     {
         ItemId = itemId;
         GridCoordinate = coord;
         _defaultSprite = sprite;
-        _spriteRenderer.sprite = sprite;
+        _isHinted = false;
+
+        if (_spriteRenderer != null)
+            _spriteRenderer.sprite = sprite;
+
         name = $"Cell_{coord.x}_{coord.y}";
     }
 
@@ -37,24 +50,38 @@ public class CubeView : MonoBehaviour
     {
         DOTween.Kill(transform);
         DOTween.Kill(transform, "hint");
+
         ItemId = null;
         GridCoordinate = default;
         _defaultSprite = null;
+        _isHinted = false;
+
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = null;
+
         transform.localScale = new Vector3(0.95f, 0.95f, 1f);
         transform.localPosition = Vector3.zero;
     }
 
+    // ==========================================
+    // COORDINATE
+    // ==========================================
+
     /// <summary>
     /// Update which coordinate this view represents.
     /// Called by GridStateManager.MoveCell during gravity.
+    /// Note: does NOT affect hint state — the CubeView keeps
+    /// its _isHinted flag through movement.
     /// </summary>
     public void UpdateCoordinate(Coordinate newCoord)
     {
         GridCoordinate = newCoord;
         name = $"Cell_{newCoord.x}_{newCoord.y}";
     }
+
+    // ==========================================
+    // SPRITE
+    // ==========================================
 
     /// <summary>
     /// Change the displayed sprite (e.g., vase cracking).
@@ -66,47 +93,49 @@ public class CubeView : MonoBehaviour
     }
 
     /// <summary>
-    /// Update the default sprite (what revert restores to).
-    /// Used when the item type hasn't changed but the base visual has.
+    /// Update the default sprite (what RemoveHint restores to).
+    /// Used when the base visual changes (vase crack) but item type stays same.
     /// </summary>
     public void SetDefaultSprite(Sprite sprite)
     {
         _defaultSprite = sprite;
     }
 
-    /// <summary>
-    /// Revert to the default (non-hint) sprite with punch animation.
-    /// </summary>
-    public void RevertToDefault()
-    {
-        if (_spriteRenderer != null && _defaultSprite != null)
-        {
-            _spriteRenderer.sprite = _defaultSprite;
+    // ==========================================
+    // HINT SYSTEM (Stateless, Idempotent)
+    // ==========================================
 
-            DOTween.Kill(transform, "hint");
-            transform.DOPunchScale(Vector3.one * 0.08f, 0.2f, 1, 0)
-                .SetId("hint");
-        }
+    /// <summary>
+    /// Apply hint visual. Swaps sprite to rocket-state version.
+    /// No-op if already hinted — prevents duplicate animations.
+    /// </summary>
+    public void ApplyHint(Sprite hintSprite)
+    {
+        if (_isHinted) return;
+        if (_spriteRenderer == null || hintSprite == null) return;
+
+        _isHinted = true;
+        _spriteRenderer.sprite = hintSprite;
+
+        DOTween.Kill(transform, "hint");
+        transform.DOPunchScale(Vector3.one * 0.12f, 0.25f, 1, 0)
+            .SetId("hint");
     }
 
     /// <summary>
-    /// Swap to rocket-state sprite (Toon Blast style hint).
+    /// Remove hint visual. Reverts sprite to default.
+    /// No-op if not hinted — prevents duplicate animations.
     /// </summary>
-    public void SetHintSprite(Sprite rocketStateSprite)
+    public void RemoveHint()
     {
-        if (_spriteRenderer == null) return;
+        if (!_isHinted) return;
+        if (_spriteRenderer == null || _defaultSprite == null) return;
 
-        if (rocketStateSprite != null)
-        {
-            _spriteRenderer.sprite = rocketStateSprite;
+        _isHinted = false;
+        _spriteRenderer.sprite = _defaultSprite;
 
-            DOTween.Kill(transform, "hint");
-            transform.DOPunchScale(Vector3.one * 0.12f, 0.25f, 1, 0)
-                .SetId("hint");
-        }
-        else if (_defaultSprite != null)
-        {
-            _spriteRenderer.sprite = _defaultSprite;
-        }
+        DOTween.Kill(transform, "hint");
+        transform.DOPunchScale(Vector3.one * 0.08f, 0.2f, 1, 0)
+            .SetId("hint");
     }
 }

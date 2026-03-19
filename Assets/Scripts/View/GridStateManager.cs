@@ -7,19 +7,15 @@ using UnityEngine;
 /// RULE: No other class modifies _cells. AnimationController plays tweens
 /// on CubeViews, then calls back into this class to update state.
 ///
-/// Responsibilities:
-///   - PlaceCell / RemoveCell / MoveCell (state changes)
-///   - SyncWithBoard (safety net after each turn)
-///   - Hint management (sprite swaps)
-///   - Sprite lookups (delegates to BoardView)
+/// Hint system is STATELESS — no coordinate tracking.
+/// Each update walks all cells and tells each one its current hint state.
+/// CubeViews are idempotent (ApplyHint/RemoveHint are no-ops if already in target state).
 /// </summary>
 public class GridStateManager
 {
     private readonly Dictionary<Coordinate, CubeView> _cells = new Dictionary<Coordinate, CubeView>();
     private readonly CubePool _pool;
-    private readonly BoardView _boardView; // For sprite lookups and GridToWorld
-
-    private HashSet<Coordinate> _currentHintCoords = new HashSet<Coordinate>();
+    private readonly BoardView _boardView;
 
     public GridStateManager(CubePool pool, BoardView boardView)
     {
@@ -33,11 +29,9 @@ public class GridStateManager
 
     /// <summary>
     /// Get a CubeView from the pool, configure it, position it, add to registry.
-    /// Returns the CubeView for animation purposes.
     /// </summary>
     public CubeView PlaceCell(Coordinate coord, string itemId)
     {
-        // Safety: remove any existing visual at this coordinate
         RemoveCell(coord);
 
         CubeView view = _pool.Get();
@@ -52,7 +46,6 @@ public class GridStateManager
 
     /// <summary>
     /// Remove a CubeView from the registry and return it to the pool.
-    /// No-op if nothing exists at this coordinate.
     /// </summary>
     public void RemoveCell(Coordinate coord)
     {
@@ -66,16 +59,13 @@ public class GridStateManager
 
     /// <summary>
     /// Move a CubeView from one coordinate to another in the registry.
-    /// Updates the dict key and CubeView's GridCoordinate.
-    /// Does NOT move the visual position — AnimationController handles that.
+    /// Only updates dict key + CubeView coordinate. Visual position is animated separately.
     /// </summary>
     public void MoveCell(Coordinate from, Coordinate to)
     {
         if (!_cells.TryGetValue(from, out var view)) return;
 
         _cells.Remove(from);
-
-        // Safety: clear destination if occupied
         RemoveCell(to);
 
         _cells[to] = view;
@@ -96,7 +86,6 @@ public class GridStateManager
 
     /// <summary>
     /// Look up a CubeView by coordinate. Returns null if not found.
-    /// AnimationController uses this for read-only access.
     /// </summary>
     public CubeView GetCell(Coordinate coord)
     {
@@ -122,7 +111,6 @@ public class GridStateManager
     public void Clear()
     {
         _cells.Clear();
-        _currentHintCoords.Clear();
         _pool.ReturnAll();
     }
 
@@ -148,14 +136,12 @@ public class GridStateManager
     // ==========================================
 
     /// <summary>
-    /// Walk the entire board and fix ANY mismatch between _cells and the Board.
-    ///
-    /// This should find nothing to fix if animations worked correctly.
-    /// It exists as a safety net — if it logs warnings, there's an animation bug.
+    /// Walk the entire board and fix any mismatch.
+    /// Logs warnings for every fix — if you see warnings, an animation has a bug.
     /// </summary>
     public void SyncWithBoard(Board board)
     {
-        // 1. Remove orphans: visual exists but board cell is empty or type changed
+        // 1. Remove orphans
         List<Coordinate> toRemove = new List<Coordinate>();
 
         foreach (var kvp in _cells)
@@ -186,7 +172,7 @@ public class GridStateManager
         foreach (var coord in toRemove)
             RemoveCell(coord);
 
-        // 2. Spawn missing: board cell has item but no visual
+        // 2. Spawn missing
         for (int x = 0; x < board.Width; x++)
         {
             for (int y = 0; y < board.Height; y++)
@@ -223,36 +209,37 @@ public class GridStateManager
     }
 
     // ==========================================
-    // HINTS
+    // HINTS (Stateless — No Coordinate Tracking)
     // ==========================================
 
     /// <summary>
-    /// Update rocket hints. Turn off old hints, turn on new ones.
+    /// Update hints across all active cells.
+    ///
+    /// Design: STATELESS. No tracking of previous hint coordinates.
+    /// Walks every active cell and tells it the current state.
+    /// CubeView.ApplyHint/RemoveHint are idempotent — no-op if
+    /// already in the target state. No duplicate animations.
+    ///
+    /// Immune to gravity because we iterate by current dict keys,
+    /// not by remembered old coordinates.
     /// </summary>
     public void UpdateHints(Dictionary<Coordinate, string> newHints)
     {
-        // Turn OFF old hints
-        foreach (var oldCoord in _currentHintCoords)
+        foreach (var kvp in _cells)
         {
-            if (!newHints.ContainsKey(oldCoord))
+            Coordinate coord = kvp.Key;
+            CubeView view = kvp.Value;
+            if (view == null) continue;
+
+            if (newHints.TryGetValue(coord, out string colorId))
             {
-                var cell = GetCell(oldCoord);
-                if (cell != null)
-                    cell.RevertToDefault();
+                Sprite hintSprite = _boardView.GetHintSpriteForColor(colorId);
+                view.ApplyHint(hintSprite);
+            }
+            else
+            {
+                view.RemoveHint();
             }
         }
-
-        // Turn ON new hints
-        foreach (var kvp in newHints)
-        {
-            var cell = GetCell(kvp.Key);
-            if (cell != null)
-            {
-                Sprite hintSprite = _boardView.GetHintSpriteForColor(kvp.Value);
-                cell.SetHintSprite(hintSprite);
-            }
-        }
-
-        _currentHintCoords = new HashSet<Coordinate>(newHints.Keys);
     }
 }
