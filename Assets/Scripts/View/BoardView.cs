@@ -85,22 +85,39 @@ public class BoardView : MonoBehaviour
         }
 
         FitCameraToBoard(board.Width, board.Height);
+
+        // After FitCameraToBoard call, find and scale grid background
+        var gridBg = GameObject.Find("GridBackground");
+        if (gridBg != null)
+        {
+            gridBg.transform.position = new Vector3(0, 0, 0.1f);
+            // Scale to cover the board with a small margin
+            float margin = 0.6f;
+            gridBg.transform.localScale = new Vector3(
+                board.Width + margin,
+                board.Height + margin,
+                1f
+            );
+        }
     }
 
     private void FitCameraToBoard(int boardWidth, int boardHeight)
     {
         if (Camera.main == null) return;
 
-        float padding = 2f;
-        float bottomPadding = 1f;
-        float requiredHeight = boardHeight + padding + bottomPadding;
+        float topUIPadding = 3.5f; // Space for the top UI bar
+        float bottomPadding = 0.5f;
+        float requiredHeight = boardHeight + topUIPadding + bottomPadding;
+
         float aspectRatio = (float)Screen.width / Screen.height;
         float requiredWidth = boardWidth + 1f;
         float heightFromWidth = (requiredWidth / aspectRatio) / 2f;
         float orthoSize = Mathf.Max(requiredHeight / 2f, heightFromWidth);
 
         Camera.main.orthographicSize = orthoSize;
-        float verticalOffset = (padding - bottomPadding) / 2f;
+
+        // Shift camera UP so the board sits lower on screen (making room for UI at top)
+        float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
     }
 
