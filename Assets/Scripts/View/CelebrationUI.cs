@@ -1,13 +1,13 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using DG.Tweening;
 
 /// <summary>
-/// Plays celebration particles and animation when the level is won,
-/// then transitions back to MainScene.
+/// Win celebration: plays particles, fades dark overlay, then loads MainScene.
 ///
-/// Case Study: "Celebration particles and animation should be shown to the user.
-/// MainScene should be loaded."
+/// Fix: gameObject.SetActive(true) called BEFORE StartCoroutine.
+/// Uses DOTween for smooth overlay fade.
 /// </summary>
 public class CelebrationUI : MonoBehaviour
 {
@@ -16,16 +16,18 @@ public class CelebrationUI : MonoBehaviour
     [SerializeField] private float _celebrationDuration = 2.5f;
     [SerializeField] private float _delayBeforeScene = 1.0f;
 
-    [Header("Optional: Overlay")]
-    [SerializeField] private CanvasGroup _overlayGroup; // Fades in during celebration
+    [Header("Overlay")]
+    [SerializeField] private CanvasGroup _overlayGroup;
 
-    /// <summary>
-    /// Play the win celebration, then load MainScene.
-    /// </summary>
     public void PlayCelebration()
     {
-        // Must enable the GameObject BEFORE starting the coroutine
+        // MUST enable before starting coroutine
         gameObject.SetActive(true);
+
+        // Reset overlay
+        if (_overlayGroup != null)
+            _overlayGroup.alpha = 0f;
+
         StartCoroutine(CelebrationSequence());
     }
 
@@ -35,32 +37,33 @@ public class CelebrationUI : MonoBehaviour
         if (_celebrationParticles != null)
         {
             _celebrationParticles.gameObject.SetActive(true);
+            _celebrationParticles.Clear();
             _celebrationParticles.Play();
         }
 
-        // 2. Fade in overlay if present
+        // 2. Fade in dark overlay using DOTween
         if (_overlayGroup != null)
         {
             _overlayGroup.gameObject.SetActive(true);
             _overlayGroup.alpha = 0f;
-
-            float fadeTime = 0.5f;
-            float elapsed = 0f;
-            while (elapsed < fadeTime)
-            {
-                _overlayGroup.alpha = elapsed / fadeTime;
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-            _overlayGroup.alpha = 1f;
+            DOTween.To(() => _overlayGroup.alpha, x => _overlayGroup.alpha = x, 0.6f, 0.5f).SetEase(Ease.InOutQuad);
         }
 
-        // 3. Wait for celebration to finish
+        // 3. Wait for celebration
         yield return new WaitForSeconds(_celebrationDuration);
 
-        // 4. Brief pause then load MainScene
+        // 4. Fade out everything
+        if (_overlayGroup != null)
+        {
+            DOTween.To(() => _overlayGroup.alpha, x => _overlayGroup.alpha = x, 1f, 0.3f);
+        }
+
         yield return new WaitForSeconds(_delayBeforeScene);
 
+        // 5. Clean up DOTween before scene change
+        DOTween.KillAll();
+
+        // 6. Load MainScene
         SceneManager.LoadScene("MainScene");
     }
 }

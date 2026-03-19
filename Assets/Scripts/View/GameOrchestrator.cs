@@ -4,12 +4,12 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// Thin wrapper: GameSession (logic) → BoardView (animations) + UI.
+/// Thin wrapper: GameSession → BoardView + UI.
 ///
-/// Scene flow:
-///   MainScene → LevelButton tap → LevelScene loads → GameOrchestrator.Start()
-///   Win → CelebrationUI → MainScene
-///   Lose → FailPopupUI → Close (MainScene) or TryAgain (reload)
+/// View Part 3 change: after every turn's animations complete,
+/// calls BoardView.ReconcileWithBoard() BEFORE updating hints.
+/// This guarantees _activeCubes is perfectly synced with the Board,
+/// so hints always appear on the correct visuals.
 /// </summary>
 public class GameOrchestrator : MonoBehaviour
 {
@@ -22,27 +22,18 @@ public class GameOrchestrator : MonoBehaviour
     [SerializeField] private FailPopupUI _failPopup;
     [SerializeField] private CelebrationUI _celebrationUI;
 
-    // --- Pure C# systems ---
     private GameSession _session;
     private LevelProgressionManager _progression;
     private int _currentLevelNumber;
-
-    // --- State ---
     private bool _isBusy;
 
-    // --- Events (for any additional listeners) ---
     public event Action<int> OnMovesChanged;
     public event Action<ObstacleGoalTracker> OnGoalsUpdated;
     public event Action OnLevelWon;
     public event Action OnLevelFailed;
 
-    // --- Public accessors ---
     public GameSession Session => _session;
     public LevelProgressionManager Progression => _progression;
-
-    // ==========================================
-    // LIFECYCLE
-    // ==========================================
 
     private void OnEnable()
     {
@@ -58,20 +49,17 @@ public class GameOrchestrator : MonoBehaviour
 
     void Start()
     {
-        // Initialize progression
         var persistence = new PlayerPrefsLevelPersistence();
         int totalLevels = LevelParser.GetTotalLevelCount();
         _progression = new LevelProgressionManager(persistence, totalLevels);
 
-        // Initialize fail popup
         if (_failPopup != null)
             _failPopup.Initialize(this);
 
-        // Load level
         int levelToPlay = _progression.GetLevelToPlay();
         if (levelToPlay == -1)
         {
-            Debug.Log("[GameOrchestrator] All levels complete. Loading level 1 for testing.");
+            Debug.Log("[GameOrchestrator] All levels complete.");
             LoadLevel(1);
         }
         else
@@ -96,12 +84,9 @@ public class GameOrchestrator : MonoBehaviour
         }
 
         _session = new GameSession(levelData);
-
-        // Build visual board
         _boardView.Initialize(_session.Board);
         _boardView.UpdateRocketHints(_session.GetHints());
 
-        // Initialize UI
         if (_gameplayUI != null)
         {
             _gameplayUI.UpdateMoves(_session.MovesRemaining);
@@ -137,20 +122,22 @@ public class GameOrchestrator : MonoBehaviour
 
         try
         {
-            // 1. Animate all steps
+            // 1. Animate all steps in order
             await AnimateTurnSteps(turnResult);
 
-            // 2. Update hints
+            // 2. RECONCILE — the key fix for all visual desync bugs
+            _boardView.ReconcileWithBoard(_session.Board);
+
+            // 3. Update hints (now guaranteed correct because reconciliation just ran)
             _boardView.UpdateRocketHints(turnResult.HintData);
 
-            // 3. Update UI
+            // 4. Update UI
             if (_gameplayUI != null)
             {
                 _gameplayUI.UpdateMoves(turnResult.MovesRemaining);
                 _gameplayUI.UpdateGoals(_session.GoalTracker);
             }
 
-            // 4. Notify listeners
             OnMovesChanged?.Invoke(turnResult.MovesRemaining);
             OnGoalsUpdated?.Invoke(_session.GoalTracker);
 
@@ -159,7 +146,7 @@ public class GameOrchestrator : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[GameOrchestrator] Exception during turn: {ex}");
+            Debug.LogError($"[GameOrchestrator] Exception: {ex}");
         }
         finally
         {
@@ -168,7 +155,7 @@ public class GameOrchestrator : MonoBehaviour
     }
 
     // ==========================================
-    // STEP ANIMATION DISPATCHER
+    // STEP DISPATCHER
     // ==========================================
 
     private async Task AnimateTurnSteps(TurnResult turnResult)
@@ -195,7 +182,10 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.ComboExplosion:
-                    await AnimateComboExplosions(step.ComboExplosionData);
+                    List<Task> comboTasks = new List<Task>();
+                    foreach (var data in step.ComboExplosionData)
+                        comboTasks.Add(_boardView.AnimateRocketExplosion(data));
+                    await Task.WhenAll(comboTasks);
                     break;
 
                 case TurnStepType.Gravity:
@@ -213,14 +203,6 @@ public class GameOrchestrator : MonoBehaviour
         }
     }
 
-    private async Task AnimateComboExplosions(List<RocketExplosionData> explosions)
-    {
-        List<Task> tasks = new List<Task>();
-        foreach (var data in explosions)
-            tasks.Add(_boardView.AnimateRocketExplosion(data));
-        await Task.WhenAll(tasks);
-    }
-
     // ==========================================
     // GAME STATE → UI
     // ==========================================
@@ -233,21 +215,15 @@ public class GameOrchestrator : MonoBehaviour
                 Debug.Log("[GameOrchestrator] LEVEL WON!");
                 _progression.AdvanceLevel();
                 OnLevelWon?.Invoke();
-
                 if (_celebrationUI != null)
                     _celebrationUI.PlayCelebration();
-                else
-                    Debug.LogWarning("[GameOrchestrator] No CelebrationUI assigned.");
                 break;
 
             case GameSessionState.Lost:
                 Debug.Log("[GameOrchestrator] LEVEL FAILED!");
                 OnLevelFailed?.Invoke();
-
                 if (_failPopup != null)
                     _failPopup.Show();
-                else
-                    Debug.LogWarning("[GameOrchestrator] No FailPopupUI assigned.");
                 break;
         }
     }
