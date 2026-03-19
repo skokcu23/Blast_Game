@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using UnityEngine;
 using DG.Tweening;
+using UnityEngine;
 
 /// <summary>
 /// Purely cosmetic animation layer.
@@ -64,13 +64,6 @@ public class AnimationController
                 seq.Join(CreatePopTween(view, coord));
         }
 
-        // Shake damaged obstacles
-        foreach (var coord in result.DamagedObstacles)
-        {
-            CubeView view = _gridState.GetCell(coord);
-            if (view != null)
-                seq.Join(CreateShakeTween(view));
-        }
 
         await seq.ToTask();
     }
@@ -88,28 +81,29 @@ public class AnimationController
         foreach (var coord in blastResult.BlastedCoordinates)
         {
             CubeView view = _gridState.GetCell(coord);
-            if (view == null) continue;
+            if (view == null)
+                continue;
 
             Coordinate capturedCoord = coord;
 
             if (coord == tapped)
             {
                 // Shrink in place
-                seq.Join(view.transform
-                    .DOScale(Vector3.zero, MERGE_DURATION)
-                    .SetEase(MERGE_EASE)
-                    .OnComplete(() => _gridState.RemoveCell(capturedCoord)));
+                seq.Join(
+                    view.transform.DOScale(Vector3.zero, MERGE_DURATION)
+                        .SetEase(MERGE_EASE)
+                        .OnComplete(() => _gridState.RemoveCell(capturedCoord))
+                );
             }
             else
             {
                 // Slide toward tapped cell and shrink
-                seq.Join(view.transform
-                    .DOMove(targetPos, MERGE_DURATION)
-                    .SetEase(MERGE_EASE));
-                seq.Join(view.transform
-                    .DOScale(Vector3.zero, MERGE_DURATION)
-                    .SetEase(MERGE_EASE)
-                    .OnComplete(() => _gridState.RemoveCell(capturedCoord)));
+                seq.Join(view.transform.DOMove(targetPos, MERGE_DURATION).SetEase(MERGE_EASE));
+                seq.Join(
+                    view.transform.DOScale(Vector3.zero, MERGE_DURATION)
+                        .SetEase(MERGE_EASE)
+                        .OnComplete(() => _gridState.RemoveCell(capturedCoord))
+                );
             }
         }
 
@@ -121,13 +115,7 @@ public class AnimationController
                 seq.Join(CreatePopTween(view, coord));
         }
 
-        // Shake damaged obstacles
-        foreach (var coord in blastResult.DamagedObstacles)
-        {
-            CubeView view = _gridState.GetCell(coord);
-            if (view != null)
-                seq.Join(CreateShakeTween(view));
-        }
+
 
         await seq.ToTask();
     }
@@ -138,15 +126,16 @@ public class AnimationController
 
     public void PlayRocketSpawn(RocketCreationData data)
     {
-        if (data == null) return;
+        if (data == null)
+            return;
 
         // Place rocket in grid state
         CubeView rocketView = _gridState.PlaceCell(data.SpawnPosition, data.RocketId);
 
         // Pop-in animation
         rocketView.transform.localScale = Vector3.zero;
-        rocketView.transform
-            .DOScale(BoardView.CellScale, ROCKET_SPAWN_DURATION)
+        rocketView
+            .transform.DOScale(BoardView.CellScale, ROCKET_SPAWN_DURATION)
             .SetEase(Ease.OutBack);
     }
 
@@ -176,12 +165,16 @@ public class AnimationController
 
         // 2. Build destroyed set (for projectile path cell destruction)
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
-        foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
-        foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
-        foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
+        foreach (var c in data.DestroyedCubes)
+            allDestroyed.Add(c);
+        foreach (var c in data.DestroyedObstacles)
+            allDestroyed.Add(c);
+        foreach (var c in data.TriggeredRockets)
+            allDestroyed.Add(c);
 
         // 3. Determine sprites
-        Sprite partASprite, partBSprite;
+        Sprite partASprite,
+            partBSprite;
         if (data.IsHorizontal)
         {
             partASprite = _boardView.HorizontalPartLeftSprite;
@@ -194,42 +187,66 @@ public class AnimationController
         }
 
         // 4. Direction vectors for fly-off
-        int dirAx, dirAy, dirBx, dirBy;
+        int dirAx,
+            dirAy,
+            dirBx,
+            dirBy;
         if (data.IsHorizontal)
-        { dirAx = -1; dirAy = 0; dirBx = 1; dirBy = 0; }
+        {
+            dirAx = -1;
+            dirAy = 0;
+            dirBx = 1;
+            dirBy = 0;
+        }
         else
-        { dirAx = 0; dirAy = -1; dirBx = 0; dirBy = 1; }
+        {
+            dirAx = 0;
+            dirAy = -1;
+            dirBx = 0;
+            dirBy = 1;
+        }
 
         // 5. Animate
         if (data.IsCombo)
-            await AnimateComboProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
+            await AnimateComboProjectiles(
+                data,
+                partASprite,
+                partBSprite,
+                allDestroyed,
+                dirAx,
+                dirAy,
+                dirBx,
+                dirBy
+            );
         else
-            await AnimateSingleProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
+            await AnimateSingleProjectiles(
+                data,
+                partASprite,
+                partBSprite,
+                allDestroyed,
+                dirAx,
+                dirAy,
+                dirBx,
+                dirBy
+            );
 
         // 6. Cleanup remaining
         foreach (var coord in allDestroyed)
             _gridState.RemoveCell(coord);
 
-        // 7. Shake damaged obstacles
-        if (data.DamagedObstacles.Count > 0)
-        {
-            Sequence shakeSeq = DOTween.Sequence();
-            foreach (var coord in data.DamagedObstacles)
-            {
-                CubeView view = _gridState.GetCell(coord);
-                if (view != null)
-                    shakeSeq.Join(CreateShakeTween(view));
-            }
-            await shakeSeq.ToTask();
-        }
+
     }
 
-
-
     private async Task AnimateSingleProjectiles(
-        RocketExplosionData data, Sprite spriteA, Sprite spriteB,
+        RocketExplosionData data,
+        Sprite spriteA,
+        Sprite spriteB,
         HashSet<Coordinate> allDestroyed,
-        int dirAx, int dirAy, int dirBx, int dirBy)
+        int dirAx,
+        int dirAy,
+        int dirBx,
+        int dirBy
+    )
     {
         GameObject partA = CreateProjectile(data.Origin, spriteA);
         GameObject partB = CreateProjectile(data.Origin, spriteB);
@@ -239,14 +256,22 @@ public class AnimationController
             AnimateProjectilePath(partB, data.PathB, allDestroyed, dirBx, dirBy)
         );
 
-        if (partA != null) Object.Destroy(partA);
-        if (partB != null) Object.Destroy(partB);
+        if (partA != null)
+            Object.Destroy(partA);
+        if (partB != null)
+            Object.Destroy(partB);
     }
 
     private async Task AnimateComboProjectiles(
-        RocketExplosionData data, Sprite spriteA, Sprite spriteB,
+        RocketExplosionData data,
+        Sprite spriteA,
+        Sprite spriteB,
         HashSet<Coordinate> allDestroyed,
-        int dirAx, int dirAy, int dirBx, int dirBy)
+        int dirAx,
+        int dirAy,
+        int dirBx,
+        int dirBy
+    )
     {
         List<GameObject> projectiles = new List<GameObject>();
         List<Task> tasks = new List<Task>();
@@ -255,7 +280,8 @@ public class AnimationController
         // 3 projectiles going A direction (left/down)
         for (int i = 0; i < data.ParallelPathsA.Count && i < 3; i++)
         {
-            if (data.ParallelPathsA[i].Count == 0) continue;
+            if (data.ParallelPathsA[i].Count == 0)
+                continue;
 
             Coordinate spawnCoord = data.IsHorizontal
                 ? new Coordinate(data.Origin.x, data.Origin.y + offsets[i])
@@ -263,13 +289,16 @@ public class AnimationController
 
             GameObject proj = CreateProjectile(spawnCoord, spriteA);
             projectiles.Add(proj);
-            tasks.Add(AnimateProjectilePath(proj, data.ParallelPathsA[i], allDestroyed, dirAx, dirAy));
+            tasks.Add(
+                AnimateProjectilePath(proj, data.ParallelPathsA[i], allDestroyed, dirAx, dirAy)
+            );
         }
 
         // 3 projectiles going B direction (right/up)
         for (int i = 0; i < data.ParallelPathsB.Count && i < 3; i++)
         {
-            if (data.ParallelPathsB[i].Count == 0) continue;
+            if (data.ParallelPathsB[i].Count == 0)
+                continue;
 
             Coordinate spawnCoord = data.IsHorizontal
                 ? new Coordinate(data.Origin.x, data.Origin.y + offsets[i])
@@ -277,30 +306,39 @@ public class AnimationController
 
             GameObject proj = CreateProjectile(spawnCoord, spriteB);
             projectiles.Add(proj);
-            tasks.Add(AnimateProjectilePath(proj, data.ParallelPathsB[i], allDestroyed, dirBx, dirBy));
+            tasks.Add(
+                AnimateProjectilePath(proj, data.ParallelPathsB[i], allDestroyed, dirBx, dirBy)
+            );
         }
 
         await Task.WhenAll(tasks);
 
         foreach (var proj in projectiles)
-            if (proj != null) Object.Destroy(proj);
+            if (proj != null)
+                Object.Destroy(proj);
     }
 
     private async Task AnimateProjectilePath(
-        GameObject projectile, List<Coordinate> path,
-        HashSet<Coordinate> destroyedCoords, int dirX, int dirY)
+        GameObject projectile,
+        List<Coordinate> path,
+        HashSet<Coordinate> destroyedCoords,
+        int dirX,
+        int dirY
+    )
     {
-        if (projectile == null || path.Count == 0) return;
+        if (projectile == null || path.Count == 0)
+            return;
 
         for (int i = 0; i < path.Count; i++)
         {
-            if (projectile == null) return;
+            if (projectile == null)
+                return;
 
             Coordinate cell = path[i];
             Vector3 targetPos = _boardView.GridToWorld(cell);
 
-            await projectile.transform
-                .DOMove(targetPos, PROJECTILE_SPEED)
+            await projectile
+                .transform.DOMove(targetPos, PROJECTILE_SPEED)
                 .SetEase(Ease.Linear)
                 .ToTask();
 
@@ -313,10 +351,11 @@ public class AnimationController
         {
             Coordinate lastCell = path[path.Count - 1];
             Vector3 flyOffPos = _boardView.GridToWorld(
-                new Coordinate(lastCell.x + dirX, lastCell.y + dirY));
+                new Coordinate(lastCell.x + dirX, lastCell.y + dirY)
+            );
 
-            await projectile.transform
-                .DOMove(flyOffPos, PROJECTILE_SPEED)
+            await projectile
+                .transform.DOMove(flyOffPos, PROJECTILE_SPEED)
                 .SetEase(Ease.Linear)
                 .ToTask();
 
@@ -351,16 +390,15 @@ public class AnimationController
         foreach (var move in movements)
         {
             CubeView view = _gridState.GetCell(move.StartPos);
-            if (view == null) continue;
+            if (view == null)
+                continue;
 
             // Update state IMMEDIATELY — dict key moves to new position
             _gridState.MoveCell(move.StartPos, move.EndPos);
 
             // Animate visual position
             Vector3 endPos = _boardView.GridToWorld(move.EndPos);
-            seq.Join(view.transform
-                .DOMove(endPos, GRAVITY_DURATION)
-                .SetEase(GRAVITY_EASE));
+            seq.Join(view.transform.DOMove(endPos, GRAVITY_DURATION).SetEase(GRAVITY_EASE));
         }
 
         await seq.ToTask();
@@ -384,9 +422,7 @@ public class AnimationController
 
             // Animate to final position
             Vector3 endPos = _boardView.GridToWorld(move.EndPos);
-            seq.Join(view.transform
-                .DOMove(endPos, REFILL_DURATION)
-                .SetEase(REFILL_EASE));
+            seq.Join(view.transform.DOMove(endPos, REFILL_DURATION).SetEase(REFILL_EASE));
         }
 
         await seq.ToTask();
@@ -406,43 +442,51 @@ public class AnimationController
             if (view == null) continue;
 
             GridItem item = board.GetItem(coord);
+            Sprite newSprite = null;
+
             if (item.Id == ItemIds.Vase)
+                newSprite = _boardView.GetVaseSprite(item.Health);
+
+            CubeView captured = view;
+            Coordinate capturedCoord = coord;
+
+            // Complete damage animation: shake → squash → sprite swap → bounce back
+            Sequence damageSeq = DOTween.Sequence();
+
+            // 1. Impact shake
+            damageSeq.Append(captured.transform
+                .DOShakePosition(0.15f, 0.08f, 10, 90, false, true, ShakeRandomnessMode.Harmonic));
+
+            // 2. Squash (sprite swaps at the peak)
+            damageSeq.Append(captured.transform
+                .DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
+                .SetEase(Ease.OutQuad));
+
+            if (newSprite != null)
             {
-                Sprite newSprite = _boardView.GetVaseSprite(item.Health);
-                CubeView captured = view;
-                Coordinate capturedCoord = coord;
-
-                Sequence vaseSeq = DOTween.Sequence();
-
-                vaseSeq.Append(view.transform
-                    .DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
-                    .SetEase(Ease.OutQuad));
-
-                vaseSeq.AppendCallback(() =>
+                Sprite capturedSprite = newSprite;
+                damageSeq.AppendCallback(() =>
                 {
                     if (captured != null)
-                        _gridState.UpdateSprite(capturedCoord, newSprite);
+                        _gridState.UpdateSprite(capturedCoord, capturedSprite);
                 });
-
-                vaseSeq.Append(view.transform
-                    .DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
-                    .SetEase(Ease.OutQuad));
-
-                vaseSeq.Append(view.transform
-                    .DOScale(BoardView.CellScale, 0.12f)
-                    .SetEase(Ease.OutBounce));
-
-                vaseSeq.Join(view.transform
-                    .DOShakePosition(0.15f, 0.06f, 8, 90, false, true, ShakeRandomnessMode.Harmonic));
-
-                seq.Join(vaseSeq); // All vases animate in parallel
             }
+
+            // 3. Bounce back to normal
+            damageSeq.Append(captured.transform
+                .DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
+                .SetEase(Ease.OutQuad));
+
+            damageSeq.Append(captured.transform
+                .DOScale(BoardView.CellScale, 0.12f)
+                .SetEase(Ease.OutBounce));
+
+            seq.Join(damageSeq); // All obstacles animate in parallel
         }
 
         if (seq.Duration() > 0)
             await seq.ToTask();
     }
-
 
     // ==========================================
     // TWEEN FACTORIES
@@ -455,13 +499,13 @@ public class AnimationController
     {
         Coordinate capturedCoord = coord;
 
-        return DOTween.Sequence()
-            .Append(view.transform
-                .DOScale(BoardView.CellScale * 1.3f, POP_DURATION * 0.4f)
-                .SetEase(POP_EASE))
-            .Append(view.transform
-                .DOScale(Vector3.zero, POP_DURATION * 0.6f)
-                .SetEase(Ease.InQuad))
+        return DOTween
+            .Sequence()
+            .Append(
+                view.transform.DOScale(BoardView.CellScale * 1.3f, POP_DURATION * 0.4f)
+                    .SetEase(POP_EASE)
+            )
+            .Append(view.transform.DOScale(Vector3.zero, POP_DURATION * 0.6f).SetEase(Ease.InQuad))
             .OnComplete(() => _gridState.RemoveCell(capturedCoord));
     }
 
@@ -471,8 +515,16 @@ public class AnimationController
     /// </summary>
     private Tween CreateShakeTween(CubeView view)
     {
-        return view.transform
-            .DOShakePosition(SHAKE_DURATION, SHAKE_STRENGTH, 10, 90, false, true, ShakeRandomnessMode.Harmonic)
+        return view
+            .transform.DOShakePosition(
+                SHAKE_DURATION,
+                SHAKE_STRENGTH,
+                10,
+                90,
+                false,
+                true,
+                ShakeRandomnessMode.Harmonic
+            )
             .SetEase(Ease.OutQuad);
     }
 }
