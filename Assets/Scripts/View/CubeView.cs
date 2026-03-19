@@ -4,13 +4,12 @@ using DG.Tweening;
 /// <summary>
 /// Visual representation of a single grid cell.
 ///
-/// Hint system: each CubeView owns its own hint state (_isHinted).
-/// ApplyHint/RemoveHint are idempotent — calling them when already
-/// in the target state is a no-op. No external tracking needed.
+/// Two derived visual systems (both idempotent, both stateless from manager's perspective):
+///   Hints:  ApplyHint/RemoveHint — swaps sprite based on group membership
+///   Health: SetHealthVisual — animates crack based on obstacle HP
 ///
-/// Sprite swap approach (Toon Blast style):
-///   Normal: blue sprite
-///   Hinted: blue_rocket sprite (full replacement, not overlay)
+/// Both follow the same pattern: the CubeView tracks its current display state
+/// internally, and only animates when the state actually changes.
 /// </summary>
 public class CubeView : MonoBehaviour
 {
@@ -21,21 +20,19 @@ public class CubeView : MonoBehaviour
 
     private Sprite _defaultSprite;
     private bool _isHinted;
+    private int _displayedHealth; // -1 = not tracking (non-obstacle)
 
     // ==========================================
     // LIFECYCLE
     // ==========================================
 
-    /// <summary>
-    /// Configure this CubeView for a specific cell.
-    /// Called by GridStateManager.PlaceCell.
-    /// </summary>
     public void Configure(Coordinate coord, Sprite sprite, string itemId)
     {
         ItemId = itemId;
         GridCoordinate = coord;
         _defaultSprite = sprite;
         _isHinted = false;
+        _displayedHealth = -1;
 
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = sprite;
@@ -44,17 +41,25 @@ public class CubeView : MonoBehaviour
     }
 
     /// <summary>
-    /// Reset all state. Called by CubePool.Return() before deactivating.
+    /// Configure with initial health tracking (for obstacles like vases).
     /// </summary>
+    public void ConfigureWithHealth(Coordinate coord, Sprite sprite, string itemId, int health)
+    {
+        Configure(coord, sprite, itemId);
+        _displayedHealth = health;
+    }
+
     public void Reset()
     {
         DOTween.Kill(transform);
         DOTween.Kill(transform, "hint");
+        DOTween.Kill(transform, "damage");
 
         ItemId = null;
         GridCoordinate = default;
         _defaultSprite = null;
         _isHinted = false;
+        _displayedHealth = -1;
 
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = null;
@@ -67,12 +72,6 @@ public class CubeView : MonoBehaviour
     // COORDINATE
     // ==========================================
 
-    /// <summary>
-    /// Update which coordinate this view represents.
-    /// Called by GridStateManager.MoveCell during gravity.
-    /// Note: does NOT affect hint state — the CubeView keeps
-    /// its _isHinted flag through movement.
-    /// </summary>
     public void UpdateCoordinate(Coordinate newCoord)
     {
         GridCoordinate = newCoord;
@@ -83,32 +82,21 @@ public class CubeView : MonoBehaviour
     // SPRITE
     // ==========================================
 
-    /// <summary>
-    /// Change the displayed sprite (e.g., vase cracking).
-    /// </summary>
     public void SetSprite(Sprite sprite)
     {
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = sprite;
     }
 
-    /// <summary>
-    /// Update the default sprite (what RemoveHint restores to).
-    /// Used when the base visual changes (vase crack) but item type stays same.
-    /// </summary>
     public void SetDefaultSprite(Sprite sprite)
     {
         _defaultSprite = sprite;
     }
 
     // ==========================================
-    // HINT SYSTEM (Stateless, Idempotent)
+    // HINTS (Stateless, Idempotent)
     // ==========================================
 
-    /// <summary>
-    /// Apply hint visual. Swaps sprite to rocket-state version.
-    /// No-op if already hinted — prevents duplicate animations.
-    /// </summary>
     public void ApplyHint(Sprite hintSprite)
     {
         if (_isHinted) return;
@@ -122,10 +110,6 @@ public class CubeView : MonoBehaviour
             .SetId("hint");
     }
 
-    /// <summary>
-    /// Remove hint visual. Reverts sprite to default.
-    /// No-op if not hinted — prevents duplicate animations.
-    /// </summary>
     public void RemoveHint()
     {
         if (!_isHinted) return;
@@ -137,5 +121,50 @@ public class CubeView : MonoBehaviour
         DOTween.Kill(transform, "hint");
         transform.DOPunchScale(Vector3.one * 0.08f, 0.2f, 1, 0)
             .SetId("hint");
+    }
+
+    // ==========================================
+    // HEALTH VISUAL (Derived State, Idempotent)
+    // ==========================================
+
+    /// <summary>
+    /// Update the obstacle's visual to match its actual health.
+    /// Idempotent: no-op if already displaying this health.
+    /// Animates with squash + sprite swap when health changes.
+    ///
+    /// Call this as many times as you want from any step —
+    /// only the first call that detects a change triggers animation.
+    /// </summary>
+    public void SetHealthVisual(int actualHealth, Sprite correctSprite)
+    {
+        if (_displayedHealth == actualHealth) return;
+
+        _displayedHealth = actualHealth;
+
+        DOTween.Kill(transform, "damage");
+
+        Sequence seq = DOTween.Sequence();
+        seq.SetId("damage");
+
+        // Squash in
+        seq.Append(transform
+            .DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
+            .SetEase(Ease.OutQuad));
+
+        // Sprite swap at peak of squash
+        seq.AppendCallback(() =>
+        {
+            SetSprite(correctSprite);
+            SetDefaultSprite(correctSprite);
+        });
+
+        // Bounce back
+        seq.Append(transform
+            .DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
+            .SetEase(Ease.OutQuad));
+
+        seq.Append(transform
+            .DOScale(new Vector3(0.95f, 0.95f, 1f), 0.12f)
+            .SetEase(Ease.OutBounce));
     }
 }

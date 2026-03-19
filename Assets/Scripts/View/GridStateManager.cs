@@ -4,12 +4,10 @@ using UnityEngine;
 /// <summary>
 /// Single owner of the visual cell registry.
 ///
-/// RULE: No other class modifies _cells. AnimationController plays tweens
-/// on CubeViews, then calls back into this class to update state.
-///
-/// Hint system is STATELESS — no coordinate tracking.
-/// Each update walks all cells and tells each one its current hint state.
-/// CubeViews are idempotent (ApplyHint/RemoveHint are no-ops if already in target state).
+/// Layer separation: animation methods receive only the data they need
+/// (Dictionary of obstacle healths), never the full Board object.
+/// Only SyncWithBoard (safety net) receives Board — it's called by
+/// the Orchestrator, which is the designated mediator between layers.
 /// </summary>
 public class GridStateManager
 {
@@ -27,9 +25,6 @@ public class GridStateManager
     // CELL STATE CHANGES
     // ==========================================
 
-    /// <summary>
-    /// Get a CubeView from the pool, configure it, position it, add to registry.
-    /// </summary>
     public CubeView PlaceCell(Coordinate coord, string itemId)
     {
         RemoveCell(coord);
@@ -44,9 +39,19 @@ public class GridStateManager
         return view;
     }
 
-    /// <summary>
-    /// Remove a CubeView from the registry and return it to the pool.
-    /// </summary>
+    public CubeView PlaceCellWithHealth(Coordinate coord, string itemId, int health, Sprite sprite)
+    {
+        RemoveCell(coord);
+
+        CubeView view = _pool.Get();
+        view.ConfigureWithHealth(coord, sprite, itemId, health);
+        view.transform.position = _boardView.GridToWorld(coord);
+        view.transform.localScale = BoardView.CellScale;
+
+        _cells[coord] = view;
+        return view;
+    }
+
     public void RemoveCell(Coordinate coord)
     {
         if (_cells.TryGetValue(coord, out var view))
@@ -57,10 +62,6 @@ public class GridStateManager
         }
     }
 
-    /// <summary>
-    /// Move a CubeView from one coordinate to another in the registry.
-    /// Only updates dict key + CubeView coordinate. Visual position is animated separately.
-    /// </summary>
     public void MoveCell(Coordinate from, Coordinate to)
     {
         if (!_cells.TryGetValue(from, out var view)) return;
@@ -72,9 +73,6 @@ public class GridStateManager
         view.UpdateCoordinate(to);
     }
 
-    /// <summary>
-    /// Update the sprite of an existing cell (e.g., vase cracking).
-    /// </summary>
     public void UpdateSprite(Coordinate coord, Sprite sprite)
     {
         if (_cells.TryGetValue(coord, out var view) && view != null)
@@ -84,18 +82,12 @@ public class GridStateManager
         }
     }
 
-    /// <summary>
-    /// Look up a CubeView by coordinate. Returns null if not found.
-    /// </summary>
     public CubeView GetCell(Coordinate coord)
     {
         _cells.TryGetValue(coord, out var view);
         return view;
     }
 
-    /// <summary>
-    /// Check if a visual exists at a coordinate.
-    /// </summary>
     public bool HasCell(Coordinate coord)
     {
         return _cells.TryGetValue(coord, out var view) && view != null;
@@ -105,9 +97,6 @@ public class GridStateManager
     // INITIALIZATION
     // ==========================================
 
-    /// <summary>
-    /// Clear all visuals and return everything to the pool.
-    /// </summary>
     public void Clear()
     {
         _cells.Clear();
@@ -115,7 +104,9 @@ public class GridStateManager
     }
 
     /// <summary>
-    /// Spawn visuals for all non-empty cells on the board.
+    /// Spawn visuals for all non-empty cells. Obstacles get health tracking.
+    /// This is the ONLY place that reads Board directly — during initialization,
+    /// called by BoardView.Initialize which is called by the Orchestrator.
     /// </summary>
     public void SpawnAll(Board board)
     {
@@ -126,22 +117,34 @@ public class GridStateManager
                 Coordinate coord = new Coordinate(x, y);
                 GridItem item = board.GetItem(coord);
                 if (item.IsEmpty) continue;
-                PlaceCell(coord, item.Id);
+
+                if (item.IsObstacle)
+                {
+                    Sprite sprite = item.Id == ItemIds.Vase
+                        ? _boardView.GetVaseSprite(item.Health)
+                        : _boardView.GetSpriteForItem(item.Id);
+                    PlaceCellWithHealth(coord, item.Id, item.Health, sprite);
+                }
+                else
+                {
+                    PlaceCell(coord, item.Id);
+                }
             }
         }
     }
 
     // ==========================================
-    // SYNC WITH BOARD (Safety Net)
+    // SYNC WITH BOARD (Safety Net — Orchestrator mediates)
     // ==========================================
 
     /// <summary>
-    /// Walk the entire board and fix any mismatch.
-    /// Logs warnings for every fix — if you see warnings, an animation has a bug.
+    /// Safety net. Called by Orchestrator (the layer mediator) after every turn.
+    /// This is the only animation-phase method that receives Board directly,
+    /// because it needs full board access for comprehensive reconciliation.
+    /// Logs warnings for any fix — warnings indicate animation bugs.
     /// </summary>
     public void SyncWithBoard(Board board)
     {
-        // 1. Remove orphans
         List<Coordinate> toRemove = new List<Coordinate>();
 
         foreach (var kvp in _cells)
@@ -172,7 +175,6 @@ public class GridStateManager
         foreach (var coord in toRemove)
             RemoveCell(coord);
 
-        // 2. Spawn missing
         for (int x = 0; x < board.Width; x++)
         {
             for (int y = 0; y < board.Height; y++)
@@ -185,44 +187,50 @@ public class GridStateManager
                 if (!HasCell(coord))
                 {
                     Debug.LogWarning($"[GridState] Missing visual at {coord} — spawning {item.Id}");
-                    PlaceCell(coord, item.Id);
+                    if (item.IsObstacle)
+                    {
+                        Sprite sprite = item.Id == ItemIds.Vase
+                            ? _boardView.GetVaseSprite(item.Health)
+                            : _boardView.GetSpriteForItem(item.Id);
+                        PlaceCellWithHealth(coord, item.Id, item.Health, sprite);
+                    }
+                    else
+                    {
+                        PlaceCell(coord, item.Id);
+                    }
                 }
             }
         }
 
-        // 3. Fix vase sprites based on health
+        // Final health refresh using snapshot
+        var healthSnapshot = BuildHealthSnapshot(board);
+        RefreshObstacleVisuals(healthSnapshot);
+    }
+
+    /// <summary>
+    /// Build a health snapshot from the board. Used internally by SyncWithBoard.
+    /// The Orchestrator builds its own snapshots for animation steps.
+    /// </summary>
+    private Dictionary<Coordinate, int> BuildHealthSnapshot(Board board)
+    {
+        var snapshot = new Dictionary<Coordinate, int>();
         for (int x = 0; x < board.Width; x++)
         {
             for (int y = 0; y < board.Height; y++)
             {
-                Coordinate coord = new Coordinate(x, y);
-                GridItem item = board.GetItem(coord);
-
-                if (item.Id == ItemIds.Vase && _cells.TryGetValue(coord, out var view) && view != null)
-                {
-                    Sprite correctSprite = _boardView.GetVaseSprite(item.Health);
-                    view.SetSprite(correctSprite);
-                    view.SetDefaultSprite(correctSprite);
-                }
+                var coord = new Coordinate(x, y);
+                var item = board.GetItem(coord);
+                if (item.Id == ItemIds.Vase && item.IsAlive)
+                    snapshot[coord] = item.Health;
             }
         }
+        return snapshot;
     }
 
     // ==========================================
-    // HINTS (Stateless — No Coordinate Tracking)
+    // DERIVED STATE: Hints (Stateless, Idempotent)
     // ==========================================
 
-    /// <summary>
-    /// Update hints across all active cells.
-    ///
-    /// Design: STATELESS. No tracking of previous hint coordinates.
-    /// Walks every active cell and tells it the current state.
-    /// CubeView.ApplyHint/RemoveHint are idempotent — no-op if
-    /// already in the target state. No duplicate animations.
-    ///
-    /// Immune to gravity because we iterate by current dict keys,
-    /// not by remembered old coordinates.
-    /// </summary>
     public void UpdateHints(Dictionary<Coordinate, string> newHints)
     {
         foreach (var kvp in _cells)
@@ -239,6 +247,33 @@ public class GridStateManager
             else
             {
                 view.RemoveHint();
+            }
+        }
+    }
+
+    // ==========================================
+    // DERIVED STATE: Health Visuals (Stateless, Idempotent)
+    // ==========================================
+
+    /// <summary>
+    /// Refresh obstacle visuals using a health snapshot.
+    /// The snapshot is a Dictionary mapping Coordinate → current health
+    /// for all living vases. Built by the Orchestrator from Board state.
+    ///
+    /// View layer never sees Board — only this lightweight data.
+    /// </summary>
+    public void RefreshObstacleVisuals(Dictionary<Coordinate, int> obstacleHealth)
+    {
+        foreach (var kvp in _cells)
+        {
+            CubeView view = kvp.Value;
+            if (view == null) continue;
+            if (view.ItemId != ItemIds.Vase) continue;
+
+            if (obstacleHealth.TryGetValue(kvp.Key, out int health))
+            {
+                Sprite correctSprite = _boardView.GetVaseSprite(health);
+                view.SetHealthVisual(health, correctSprite);
             }
         }
     }

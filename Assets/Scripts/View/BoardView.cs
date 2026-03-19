@@ -4,15 +4,14 @@ using UnityEngine;
 using DG.Tweening;
 
 /// <summary>
-/// Thin facade coordinating the three view subsystems:
-///   CubePool         — object pooling for CubeViews
-///   GridStateManager — single owner of visual state (_cells dictionary)
-///   AnimationController — purely cosmetic DOTween animations
+/// Thin facade coordinating the three view subsystems.
 ///
-/// The Orchestrator only talks to BoardView. BoardView delegates everything.
+/// LAYER RULE: Animation methods never receive Board.
+/// They receive Dictionary&lt;Coordinate, int&gt; obstacleHealth —
+/// a lightweight snapshot built by the Orchestrator (the layer mediator).
 ///
-/// Also holds all sprite references (SerializedFields) and provides
-/// lookup methods used by the subsystems.
+/// Only Initialize and ReconcileWithBoard receive Board,
+/// both called directly by the Orchestrator.
 /// </summary>
 public class BoardView : MonoBehaviour
 {
@@ -50,27 +49,20 @@ public class BoardView : MonoBehaviour
     [Header("Background")]
     [SerializeField] private SpriteRenderer _levelBackground;
 
-    // --- Public accessors for AnimationController ---
+    // Public accessors for AnimationController
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
     public Sprite HorizontalPartRightSprite => _horizontalPartRightSprite;
     public Sprite VerticalPartTopSprite => _verticalPartTopSprite;
     public Sprite VerticalPartBottomSprite => _verticalPartBottomSprite;
 
-    // --- Shared scale constant ---
     public static readonly Vector3 CellScale = new Vector3(0.95f, 0.95f, 1f);
 
-    // --- Subsystems ---
     private CubePool _pool;
     private GridStateManager _gridState;
     private AnimationController _animator;
 
-    // --- Grid geometry ---
     private float _offsetX;
     private float _offsetY;
-
-    // ==========================================
-    // LIFECYCLE
-    // ==========================================
 
     private void Awake()
     {
@@ -80,7 +72,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // INITIALIZATION
+    // INITIALIZATION (receives Board — called by Orchestrator)
     // ==========================================
 
     public void Initialize(Board board)
@@ -90,30 +82,25 @@ public class BoardView : MonoBehaviour
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
 
-        // Clear and rebuild
         _gridState.Clear();
-
-        // Prewarm pool: board size + extra for refill
         _pool.Prewarm(board.Width * board.Height + 20);
-
-        // Spawn all cells
         _gridState.SpawnAll(board);
 
         FitCameraToBoard(board.Width, board.Height);
     }
 
     // ==========================================
-    // PUBLIC API — Called by GameOrchestrator
+    // ANIMATION API (receives health snapshot, never Board)
     // ==========================================
 
-    public async Task AnimateBlast(BlastResult result)
+    public async Task AnimateBlast(BlastResult result, Dictionary<Coordinate, int> obstacleHealth)
     {
-        await _animator.PlayBlast(result);
+        await _animator.PlayBlast(result, obstacleHealth);
     }
 
-    public async Task AnimateRocketCreation(BlastResult blastResult)
+    public async Task AnimateRocketCreation(BlastResult blastResult, Dictionary<Coordinate, int> obstacleHealth)
     {
-        await _animator.PlayRocketCreation(blastResult);
+        await _animator.PlayRocketCreation(blastResult, obstacleHealth);
     }
 
     public void SpawnRocketVisual(RocketCreationData data)
@@ -121,9 +108,9 @@ public class BoardView : MonoBehaviour
         _animator.PlayRocketSpawn(data);
     }
 
-    public async Task AnimateRocketExplosion(RocketExplosionData data)
+    public async Task AnimateRocketExplosion(RocketExplosionData data, Dictionary<Coordinate, int> obstacleHealth)
     {
-        await _animator.PlayRocketExplosion(data);
+        await _animator.PlayRocketExplosion(data, obstacleHealth);
     }
 
     public async Task AnimateGravity(List<ItemMovement> movements)
@@ -136,10 +123,9 @@ public class BoardView : MonoBehaviour
         await _animator.PlayRefill(newItems);
     }
 
-    public async Task UpdateDamagedSprites(Board board, List<Coordinate> damagedCoords)
-    {
-        await _animator.PlayDamagedSprites(board, damagedCoords);
-    }
+    // ==========================================
+    // RECONCILIATION (receives Board — Orchestrator mediates)
+    // ==========================================
 
     public void ReconcileWithBoard(Board board)
     {
@@ -155,10 +141,6 @@ public class BoardView : MonoBehaviour
     // COORDINATE CONVERSION
     // ==========================================
 
-    /// <summary>
-    /// Convert a grid coordinate to a world position.
-    /// Used by GridStateManager and AnimationController.
-    /// </summary>
     public Vector3 GridToWorld(Coordinate coord)
     {
         return new Vector3(coord.x - _offsetX, coord.y - _offsetY, 0);
@@ -168,10 +150,6 @@ public class BoardView : MonoBehaviour
     // SPRITE LOOKUPS
     // ==========================================
 
-    /// <summary>
-    /// Get the default sprite for an item ID.
-    /// Used by GridStateManager when placing cells.
-    /// </summary>
     public Sprite GetSpriteForItem(string itemId) => itemId switch
     {
         ItemIds.Blue => _blueSprite,
@@ -186,15 +164,9 @@ public class BoardView : MonoBehaviour
         _ => null,
     };
 
-    /// <summary>
-    /// Get the vase sprite for a specific health value.
-    /// </summary>
     public Sprite GetVaseSprite(int health) =>
         (health <= 1 && _vaseDamagedSprite != null) ? _vaseDamagedSprite : _vaseSprite;
 
-    /// <summary>
-    /// Get the rocket-state hint sprite for a cube color.
-    /// </summary>
     public Sprite GetHintSpriteForColor(string itemId) => itemId switch
     {
         ItemIds.Red => _redRocketHint,
@@ -226,7 +198,6 @@ public class BoardView : MonoBehaviour
         float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
 
-        // Scale background to fill camera view
         if (_levelBackground != null && _levelBackground.sprite != null)
         {
             float cameraHeight = Camera.main.orthographicSize * 2f;
