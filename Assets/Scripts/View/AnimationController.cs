@@ -159,12 +159,19 @@ public class AnimationController
         // 1. Remove rocket at origin
         _gridState.RemoveCell(data.Origin);
 
-        // 1b. For combos: clear 3×3 area immediately
+        // 1b. For combos: remove visuals that the logic actually destroyed
         if (data.IsCombo)
         {
-            for (int dx = -1; dx <= 1; dx++)
-                for (int dy = -1; dy <= 1; dy++)
-                    _gridState.RemoveCell(new Coordinate(data.Origin.x + dx, data.Origin.y + dy));
+            // Remove the origin (tapped rocket)
+            _gridState.RemoveCell(data.Origin);
+
+            // Remove destroyed cubes in 3×3 area
+            foreach (var coord in data.DestroyedCubes)
+                _gridState.RemoveCell(coord);
+
+            // Remove destroyed obstacles in 3×3 area
+            foreach (var coord in data.DestroyedObstacles)
+                _gridState.RemoveCell(coord);
         }
 
         // 2. Build destroyed set
