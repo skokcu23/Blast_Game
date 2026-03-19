@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using UnityEngine;
 using DG.Tweening;
+using UnityEngine;
 
 /// <summary>
 /// View Part 3: Complete rewrite with DOTween and reconciliation.
@@ -16,37 +16,67 @@ using DG.Tweening;
 public class BoardView : MonoBehaviour
 {
     [Header("Prefab")]
-    [SerializeField] private GameObject _cubePrefab;
+    [SerializeField]
+    private GameObject _cubePrefab;
 
     [Header("Cube Sprites")]
-    [SerializeField] private Sprite _blueSprite;
-    [SerializeField] private Sprite _redSprite;
-    [SerializeField] private Sprite _yellowSprite;
-    [SerializeField] private Sprite _greenSprite;
+    [SerializeField]
+    private Sprite _blueSprite;
+
+    [SerializeField]
+    private Sprite _redSprite;
+
+    [SerializeField]
+    private Sprite _yellowSprite;
+
+    [SerializeField]
+    private Sprite _greenSprite;
 
     [Header("Rocket Hint Sprites")]
-    [SerializeField] private Sprite _redRocketHint;
-    [SerializeField] private Sprite _blueRocketHint;
-    [SerializeField] private Sprite _greenRocketHint;
-    [SerializeField] private Sprite _yellowRocketHint;
+    [SerializeField]
+    private Sprite _redRocketHint;
+
+    [SerializeField]
+    private Sprite _blueRocketHint;
+
+    [SerializeField]
+    private Sprite _greenRocketHint;
+
+    [SerializeField]
+    private Sprite _yellowRocketHint;
 
     [Header("Obstacle Sprites")]
-    [SerializeField] private Sprite _boxSprite;
-    [SerializeField] private Sprite _stoneSprite;
-    [SerializeField] private Sprite _vaseSprite;
-    [SerializeField] private Sprite _vaseDamagedSprite;
+    [SerializeField]
+    private Sprite _boxSprite;
+
+    [SerializeField]
+    private Sprite _stoneSprite;
+
+    [SerializeField]
+    private Sprite _vaseSprite;
+
+    [SerializeField]
+    private Sprite _vaseDamagedSprite;
 
     [Header("Rocket Sprites")]
-    [SerializeField] private Sprite _verticalRocketSprite;
-    [SerializeField] private Sprite _horizontalRocketSprite;
+    [SerializeField]
+    private Sprite _verticalRocketSprite;
+
+    [SerializeField]
+    private Sprite _horizontalRocketSprite;
 
     [Header("Rocket Part Sprites")]
-    [SerializeField] private Sprite _horizontalPartLeftSprite;
-    [SerializeField] private Sprite _horizontalPartRightSprite;
-    [SerializeField] private Sprite _verticalPartTopSprite;
-    [SerializeField] private Sprite _verticalPartBottomSprite;
+    [SerializeField]
+    private Sprite _horizontalPartLeftSprite;
 
+    [SerializeField]
+    private Sprite _horizontalPartRightSprite;
 
+    [SerializeField]
+    private Sprite _verticalPartTopSprite;
+
+    [SerializeField]
+    private Sprite _verticalPartBottomSprite;
 
     // --- Animation Tuning ---
     private const float POP_DURATION = 0.15f;
@@ -98,7 +128,8 @@ public class BoardView : MonoBehaviour
             {
                 Coordinate coord = new Coordinate(x, y);
                 GridItem item = board.GetItem(coord);
-                if (item.IsEmpty) continue;
+                if (item.IsEmpty)
+                    continue;
                 SpawnCube(coord, item.Id);
             }
         }
@@ -165,7 +196,8 @@ public class BoardView : MonoBehaviour
                 Coordinate coord = new Coordinate(x, y);
                 GridItem item = board.GetItem(coord);
 
-                if (item.IsEmpty) continue;
+                if (item.IsEmpty)
+                    continue;
 
                 if (!_activeCubes.ContainsKey(coord) || _activeCubes[coord] == null)
                 {
@@ -212,7 +244,8 @@ public class BoardView : MonoBehaviour
 
     private void FitCameraToBoard(int boardWidth, int boardHeight)
     {
-        if (Camera.main == null) return;
+        if (Camera.main == null)
+            return;
 
         float topUIPadding = 3.5f;
         float bottomPadding = 0.5f;
@@ -227,39 +260,39 @@ public class BoardView : MonoBehaviour
 
         float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
-
-
     }
 
     // ==========================================
     // SPRITE MAPPING
     // ==========================================
 
-    private Sprite GetSpriteForItem(string itemId) => itemId switch
-    {
-        ItemIds.Blue => _blueSprite,
-        ItemIds.Red => _redSprite,
-        ItemIds.Yellow => _yellowSprite,
-        ItemIds.Green => _greenSprite,
-        ItemIds.Box => _boxSprite,
-        ItemIds.Stone => _stoneSprite,
-        ItemIds.Vase => _vaseSprite,
-        ItemIds.VerticalRocket => _verticalRocketSprite,
-        ItemIds.HorizontalRocket => _horizontalRocketSprite,
-        _ => null,
-    };
+    private Sprite GetSpriteForItem(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Blue => _blueSprite,
+            ItemIds.Red => _redSprite,
+            ItemIds.Yellow => _yellowSprite,
+            ItemIds.Green => _greenSprite,
+            ItemIds.Box => _boxSprite,
+            ItemIds.Stone => _stoneSprite,
+            ItemIds.Vase => _vaseSprite,
+            ItemIds.VerticalRocket => _verticalRocketSprite,
+            ItemIds.HorizontalRocket => _horizontalRocketSprite,
+            _ => null,
+        };
 
     private Sprite GetVaseSprite(int health) =>
         (health <= 1 && _vaseDamagedSprite != null) ? _vaseDamagedSprite : _vaseSprite;
 
-    private Sprite GetHintSpriteForColor(string itemId) => itemId switch
-    {
-        ItemIds.Red => _redRocketHint,
-        ItemIds.Blue => _blueRocketHint,
-        ItemIds.Green => _greenRocketHint,
-        ItemIds.Yellow => _yellowRocketHint,
-        _ => null,
-    };
+    private Sprite GetHintSpriteForColor(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Red => _redRocketHint,
+            ItemIds.Blue => _blueRocketHint,
+            ItemIds.Green => _greenRocketHint,
+            ItemIds.Yellow => _yellowRocketHint,
+            _ => null,
+        };
 
     // ==========================================
     // SPAWNING & CLEANUP
@@ -295,15 +328,59 @@ public class BoardView : MonoBehaviour
     // ==========================================
     // SPRITE UPDATES
     // ==========================================
-
     public void UpdateDamagedSprites(Board board, List<Coordinate> damagedCoords)
     {
         foreach (var coord in damagedCoords)
         {
-            if (!_activeCubes.TryGetValue(coord, out var cubeView)) continue;
+            if (!_activeCubes.TryGetValue(coord, out var cubeView))
+                continue;
+            if (cubeView == null)
+                continue;
+
             GridItem item = board.GetItem(coord);
             if (item.Id == ItemIds.Vase)
-                cubeView.SetSprite(GetVaseSprite(item.Health));
+            {
+                Sprite newSprite = GetVaseSprite(item.Health);
+
+                // Shake + punch, swap sprite mid-animation
+                Sequence seq = DOTween.Sequence();
+
+                // Quick squeeze (squash horizontally, stretch vertically)
+                seq.Append(
+                    cubeView
+                        .transform.DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
+                        .SetEase(Ease.OutQuad)
+                );
+
+                // At the squeeze peak, swap the sprite
+                seq.AppendCallback(() =>
+                {
+                    if (cubeView != null)
+                        cubeView.SetSprite(newSprite);
+                });
+
+                // Bounce back to normal through overshoot
+                seq.Append(
+                    cubeView
+                        .transform.DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
+                        .SetEase(Ease.OutQuad)
+                );
+
+                seq.Append(cubeView.transform.DOScale(CubeScale, 0.12f).SetEase(Ease.OutBounce));
+
+                // Add a small shake for impact feel
+                seq.Join(
+                    cubeView.transform.DOShakePosition(
+                        0.15f,
+                        0.06f,
+                        8,
+                        90,
+                        false,
+                        true,
+                        ShakeRandomnessMode.Harmonic
+                    )
+                );
+            }
         }
     }
 
@@ -387,22 +464,30 @@ public class BoardView : MonoBehaviour
                 if (coord == tapped)
                 {
                     // Shrink in place
-                    seq.Join(cube.transform
-                        .DOScale(Vector3.zero, MERGE_DURATION)
-                        .SetEase(MERGE_EASE)
-                        .OnComplete(() => { if (cube != null) Destroy(cube.gameObject); }));
+                    seq.Join(
+                        cube.transform.DOScale(Vector3.zero, MERGE_DURATION)
+                            .SetEase(MERGE_EASE)
+                            .OnComplete(() =>
+                            {
+                                if (cube != null)
+                                    Destroy(cube.gameObject);
+                            })
+                    );
                 }
                 else
                 {
                     // Slide toward tapped cell and shrink
                     CubeView captured = cube; // capture for closure
-                    seq.Join(cube.transform
-                        .DOMove(targetPos, MERGE_DURATION)
-                        .SetEase(MERGE_EASE));
-                    seq.Join(cube.transform
-                        .DOScale(Vector3.zero, MERGE_DURATION)
-                        .SetEase(MERGE_EASE)
-                        .OnComplete(() => { if (captured != null) Destroy(captured.gameObject); }));
+                    seq.Join(cube.transform.DOMove(targetPos, MERGE_DURATION).SetEase(MERGE_EASE));
+                    seq.Join(
+                        cube.transform.DOScale(Vector3.zero, MERGE_DURATION)
+                            .SetEase(MERGE_EASE)
+                            .OnComplete(() =>
+                            {
+                                if (captured != null)
+                                    Destroy(captured.gameObject);
+                            })
+                    );
                 }
             }
         }
@@ -432,34 +517,50 @@ public class BoardView : MonoBehaviour
 
     public void SpawnRocketVisual(RocketCreationData data)
     {
-        if (data == null) return;
+        if (data == null)
+            return;
         DestroyCubeAt(data.SpawnPosition);
         CubeView rocketView = SpawnCube(data.SpawnPosition, data.RocketId);
 
         // Pop-in animation
         rocketView.transform.localScale = Vector3.zero;
-        rocketView.transform
-            .DOScale(CubeScale, ROCKET_SPAWN_DURATION)
-            .SetEase(Ease.OutBack);
+        rocketView.transform.DOScale(CubeScale, ROCKET_SPAWN_DURATION).SetEase(Ease.OutBack);
     }
 
     // ==========================================
     // ANIMATION: Rocket Explosion
     // ==========================================
 
+    /// <summary>
+    /// Animate a rocket explosion. Handles both single and combo modes:
+    ///   Single: 1 projectile each direction (PathA/PathB)
+    ///   Combo:  3 parallel projectiles each direction (ParallelPathsA/ParallelPathsB)
+    /// </summary>
     public async Task AnimateRocketExplosion(RocketExplosionData data)
     {
         // 1. Remove rocket at origin
         DestroyCubeAt(data.Origin);
 
-        // 2. Build destroyed set
+        // 1b. For combos: destroy all 3×3 visuals immediately
+        //     (combo participants + area cleared by logic)
+        if (data.IsCombo)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    DestroyCubeAt(new Coordinate(data.Origin.x + dx, data.Origin.y + dy));
+        }
+        // 2. Build destroyed set (same for both modes)
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
-        foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
-        foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
-        foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
+        foreach (var c in data.DestroyedCubes)
+            allDestroyed.Add(c);
+        foreach (var c in data.DestroyedObstacles)
+            allDestroyed.Add(c);
+        foreach (var c in data.TriggeredRockets)
+            allDestroyed.Add(c);
 
-        // 3. Create projectile sprites
-        Sprite partASprite, partBSprite;
+        // 3. Determine sprites
+        Sprite partASprite,
+            partBSprite;
         if (data.IsHorizontal)
         {
             partASprite = _horizontalPartLeftSprite;
@@ -471,23 +572,21 @@ public class BoardView : MonoBehaviour
             partBSprite = _verticalPartTopSprite;
         }
 
-        GameObject partA = CreateProjectile(data.Origin, partASprite);
-        GameObject partB = CreateProjectile(data.Origin, partBSprite);
+        // 4. Animate based on mode
+        if (data.IsCombo)
+        {
+            await AnimateComboProjectiles(data, partASprite, partBSprite, allDestroyed);
+        }
+        else
+        {
+            await AnimateSingleProjectiles(data, partASprite, partBSprite, allDestroyed);
+        }
 
-        // 4. Animate both paths in parallel
-        Task taskA = AnimateProjectilePath(partA, data.PathA, allDestroyed);
-        Task taskB = AnimateProjectilePath(partB, data.PathB, allDestroyed);
-        await Task.WhenAll(taskA, taskB);
-
-        // 5. Destroy projectiles
-        if (partA != null) Destroy(partA);
-        if (partB != null) Destroy(partB);
-
-        // 6. Cleanup off-path cells (combo 3×3 corners)
+        // 5. Cleanup off-path cells (3×3 corners in combos)
         foreach (var coord in allDestroyed)
             DestroyCubeAt(coord);
 
-        // 7. Shake damaged obstacles
+        // 6. Shake damaged obstacles
         if (data.DamagedObstacles.Count > 0)
         {
             Sequence shakeSeq = DOTween.Sequence();
@@ -497,6 +596,187 @@ public class BoardView : MonoBehaviour
                     shakeSeq.Join(CreateShakeTween(cube));
             }
             await shakeSeq.ToTask();
+        }
+    }
+
+    private async Task AnimateSingleProjectiles(
+        RocketExplosionData data,
+        Sprite spriteA,
+        Sprite spriteB,
+        HashSet<Coordinate> allDestroyed
+    )
+    {
+        GameObject partA = CreateProjectile(data.Origin, spriteA);
+        GameObject partB = CreateProjectile(data.Origin, spriteB);
+
+        int dirAx,
+            dirAy,
+            dirBx,
+            dirBy;
+        if (data.IsHorizontal)
+        {
+            dirAx = -1;
+            dirAy = 0;
+            dirBx = 1;
+            dirBy = 0;
+        }
+        else
+        {
+            dirAx = 0;
+            dirAy = -1;
+            dirBx = 0;
+            dirBy = 1;
+        }
+
+        await Task.WhenAll(
+            AnimateProjectilePathWithFlyOff(partA, data.PathA, allDestroyed, dirAx, dirAy),
+            AnimateProjectilePathWithFlyOff(partB, data.PathB, allDestroyed, dirBx, dirBy)
+        );
+
+        if (partA != null)
+            Destroy(partA);
+        if (partB != null)
+            Destroy(partB);
+    }
+
+    private async Task AnimateComboProjectiles(
+        RocketExplosionData data,
+        Sprite spriteA,
+        Sprite spriteB,
+        HashSet<Coordinate> allDestroyed
+    )
+    {
+        List<GameObject> projectiles = new List<GameObject>();
+        List<Task> tasks = new List<Task>();
+
+        int[] offsets = { -1, 0, 1 };
+
+        // Direction vectors for "fly off" after path ends
+        int dirAx,
+            dirAy,
+            dirBx,
+            dirBy;
+        if (data.IsHorizontal)
+        {
+            dirAx = -1;
+            dirAy = 0; // left
+            dirBx = 1;
+            dirBy = 0; // right
+        }
+        else
+        {
+            dirAx = 0;
+            dirAy = -1; // down
+            dirBx = 0;
+            dirBy = 1; // up
+        }
+
+        // ParallelPathsA (left/down direction)
+        for (int i = 0; i < data.ParallelPathsA.Count && i < 3; i++)
+        {
+            if (data.ParallelPathsA[i].Count == 0)
+                continue; // Don't spawn for empty/out-of-bounds paths
+
+            Coordinate spawnCoord;
+            if (data.IsHorizontal)
+                spawnCoord = new Coordinate(data.Origin.x, data.Origin.y + offsets[i]);
+            else
+                spawnCoord = new Coordinate(data.Origin.x + offsets[i], data.Origin.y);
+
+            GameObject proj = CreateProjectile(spawnCoord, spriteA);
+            projectiles.Add(proj);
+            tasks.Add(
+                AnimateProjectilePathWithFlyOff(
+                    proj,
+                    data.ParallelPathsA[i],
+                    allDestroyed,
+                    dirAx,
+                    dirAy
+                )
+            );
+        }
+
+        // ParallelPathsB (right/up direction)
+        for (int i = 0; i < data.ParallelPathsB.Count && i < 3; i++)
+        {
+            if (data.ParallelPathsB[i].Count == 0)
+                continue;
+
+            Coordinate spawnCoord;
+            if (data.IsHorizontal)
+                spawnCoord = new Coordinate(data.Origin.x, data.Origin.y + offsets[i]);
+            else
+                spawnCoord = new Coordinate(data.Origin.x + offsets[i], data.Origin.y);
+
+            GameObject proj = CreateProjectile(spawnCoord, spriteB);
+            projectiles.Add(proj);
+            tasks.Add(
+                AnimateProjectilePathWithFlyOff(
+                    proj,
+                    data.ParallelPathsB[i],
+                    allDestroyed,
+                    dirBx,
+                    dirBy
+                )
+            );
+        }
+
+        await Task.WhenAll(tasks);
+
+        foreach (var proj in projectiles)
+        {
+            if (proj != null)
+                Destroy(proj);
+        }
+    }
+
+    /// <summary>
+    /// Animate a projectile along its path, destroying cells as it passes.
+    /// After reaching the last cell, flies one extra unit off the board edge
+    /// and self-destructs — prevents "stuck at edge" visual.
+    /// </summary>
+    private async Task AnimateProjectilePathWithFlyOff(
+        GameObject projectile,
+        List<Coordinate> path,
+        HashSet<Coordinate> destroyedCoords,
+        int dirX,
+        int dirY
+    )
+    {
+        if (projectile == null || path.Count == 0)
+            return;
+
+        // Travel along path
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (projectile == null)
+                return;
+
+            Coordinate cell = path[i];
+            Vector3 targetPos = GridToWorld(cell);
+
+            await projectile
+                .transform.DOMove(targetPos, PROJECTILE_SPEED)
+                .SetEase(Ease.Linear)
+                .ToTask();
+
+            if (destroyedCoords.Contains(cell))
+                DestroyCubeAt(cell);
+        }
+
+        // Fly off: one more unit in travel direction, then destroy
+        if (projectile != null)
+        {
+            Coordinate lastCell = path[path.Count - 1];
+            Vector3 flyOffPos = GridToWorld(new Coordinate(lastCell.x + dirX, lastCell.y + dirY));
+
+            await projectile
+                .transform.DOMove(flyOffPos, PROJECTILE_SPEED)
+                .SetEase(Ease.Linear)
+                .ToTask();
+
+            if (projectile != null)
+                Destroy(projectile);
         }
     }
 
@@ -513,30 +793,6 @@ public class BoardView : MonoBehaviour
         go.transform.localScale = CubeScale;
 
         return go;
-    }
-
-    private async Task AnimateProjectilePath(
-        GameObject projectile, List<Coordinate> path, HashSet<Coordinate> destroyedCoords)
-    {
-        if (projectile == null || path.Count == 0) return;
-
-        for (int i = 0; i < path.Count; i++)
-        {
-            if (projectile == null) return;
-
-            Coordinate cell = path[i];
-            Vector3 targetPos = GridToWorld(cell);
-
-            // Slide projectile to this cell
-            await projectile.transform
-                .DOMove(targetPos, PROJECTILE_SPEED)
-                .SetEase(Ease.Linear)
-                .ToTask();
-
-            // Destroy visual at this cell
-            if (destroyedCoords.Contains(cell))
-                DestroyCubeAt(cell);
-        }
     }
 
     // ==========================================
@@ -556,14 +812,15 @@ public class BoardView : MonoBehaviour
                 _activeCubes[move.EndPos] = cube;
 
                 Vector3 endPos = GridToWorld(move.EndPos);
-                seq.Join(cube.transform
-                    .DOMove(endPos, GRAVITY_DURATION)
-                    .SetEase(GRAVITY_EASE)
-                    .OnComplete(() =>
-                    {
-                        if (cube != null)
-                            cube.UpdateCoordinate(move.EndPos);
-                    }));
+                seq.Join(
+                    cube.transform.DOMove(endPos, GRAVITY_DURATION)
+                        .SetEase(GRAVITY_EASE)
+                        .OnComplete(() =>
+                        {
+                            if (cube != null)
+                                cube.UpdateCoordinate(move.EndPos);
+                        })
+                );
             }
         }
 
@@ -592,14 +849,15 @@ public class BoardView : MonoBehaviour
 
             _activeCubes[move.EndPos] = view;
 
-            seq.Join(go.transform
-                .DOMove(endPos, REFILL_DURATION)
-                .SetEase(REFILL_EASE)
-                .OnComplete(() =>
-                {
-                    if (view != null)
-                        view.UpdateCoordinate(move.EndPos);
-                }));
+            seq.Join(
+                go.transform.DOMove(endPos, REFILL_DURATION)
+                    .SetEase(REFILL_EASE)
+                    .OnComplete(() =>
+                    {
+                        if (view != null)
+                            view.UpdateCoordinate(move.EndPos);
+                    })
+            );
         }
 
         await seq.ToTask();
@@ -614,14 +872,15 @@ public class BoardView : MonoBehaviour
     /// </summary>
     private Tween CreatePopTween(CubeView cube)
     {
-        return DOTween.Sequence()
-            .Append(cube.transform
-                .DOScale(CubeScale * 1.3f, POP_DURATION * 0.4f)
-                .SetEase(POP_EASE))
-            .Append(cube.transform
-                .DOScale(Vector3.zero, POP_DURATION * 0.6f)
-                .SetEase(Ease.InQuad))
-            .OnComplete(() => { if (cube != null) Destroy(cube.gameObject); });
+        return DOTween
+            .Sequence()
+            .Append(cube.transform.DOScale(CubeScale * 1.3f, POP_DURATION * 0.4f).SetEase(POP_EASE))
+            .Append(cube.transform.DOScale(Vector3.zero, POP_DURATION * 0.6f).SetEase(Ease.InQuad))
+            .OnComplete(() =>
+            {
+                if (cube != null)
+                    Destroy(cube.gameObject);
+            });
     }
 
     /// <summary>
@@ -629,8 +888,16 @@ public class BoardView : MonoBehaviour
     /// </summary>
     private Tween CreateShakeTween(CubeView cube)
     {
-        return cube.transform
-            .DOShakePosition(SHAKE_DURATION, SHAKE_STRENGTH, 10, 90, false, true, ShakeRandomnessMode.Harmonic)
+        return cube
+            .transform.DOShakePosition(
+                SHAKE_DURATION,
+                SHAKE_STRENGTH,
+                10,
+                90,
+                false,
+                true,
+                ShakeRandomnessMode.Harmonic
+            )
             .SetEase(Ease.OutQuad);
     }
 }

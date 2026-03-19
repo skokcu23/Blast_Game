@@ -3,11 +3,14 @@ using System.Collections.Generic;
 /// <summary>
 /// DTO: Describes one rocket explosion for the View to animate.
 ///
-/// A rocket splits into two "projectiles" moving in opposite directions.
-/// PathA/PathB are ordered lists of cells each projectile passes through.
+/// Two modes:
+///   Single rocket: uses PathA/PathB (1 projectile each direction)
+///   Combo rocket: uses ParallelPathsA/ParallelPathsB (3 projectiles each direction)
 ///
-/// TriggeredRockets: rockets hit by this explosion that the queue should process next.
-/// IMPORTANT: These rockets are still ON the board — ExplodeRocket() handles removal.
+/// Check IsCombo to determine which paths to read.
+///
+/// Damage data (DestroyedCubes, DamagedObstacles, etc.) is the same
+/// regardless of mode — it's the aggregate of all paths.
 /// </summary>
 public class RocketExplosionData
 {
@@ -15,34 +18,50 @@ public class RocketExplosionData
     public bool IsHorizontal;
     public string RocketId;
 
-    /// <summary>Ordered path of first projectile (left or down)</summary>
+    // --- Single rocket paths (1 per direction) ---
+
+    /// <summary>Single path: left or down</summary>
     public List<Coordinate> PathA;
 
-    /// <summary>Ordered path of second projectile (right or up)</summary>
+    /// <summary>Single path: right or up</summary>
     public List<Coordinate> PathB;
 
-    /// <summary>Cubes destroyed by this explosion</summary>
-    public List<Coordinate> DestroyedCubes;
-
-    /// <summary>Obstacles damaged but survived</summary>
-    public List<Coordinate> DamagedObstacles;
-
-    /// <summary>Obstacles destroyed by this explosion</summary>
-    public List<Coordinate> DestroyedObstacles;
-
-    /// <summary>Type info for GoalTracker (captured before board cell cleared)</summary>
-    public List<DestroyedObstacleInfo> DestroyedObstacleInfos;
+    // --- Combo rocket paths (3 per direction) ---
 
     /// <summary>
-    /// Rockets hit by this explosion — still on the board.
-    /// The Orchestrator enqueues these for chain reaction processing.
+    /// Combo: 3 parallel paths going left/down.
+    /// Each inner list is one row/column's path, ordered by cell.
+    /// For horizontal: [row y-1], [row y], [row y+1]
+    /// For vertical: [col x-1], [col x], [col x+1]
     /// </summary>
+    public List<List<Coordinate>> ParallelPathsA;
+
+    /// <summary>
+    /// Combo: 3 parallel paths going right/up.
+    /// Same structure as ParallelPathsA but opposite direction.
+    /// </summary>
+    public List<List<Coordinate>> ParallelPathsB;
+
+    // --- Damage data (same for both modes) ---
+
+    public List<Coordinate> DestroyedCubes;
+    public List<Coordinate> DamagedObstacles;
+    public List<Coordinate> DestroyedObstacles;
+    public List<DestroyedObstacleInfo> DestroyedObstacleInfos;
     public List<Coordinate> TriggeredRockets;
+
+    /// <summary>
+    /// True if this explosion uses parallel paths (combo).
+    /// The View checks this to decide how many projectiles to spawn.
+    /// </summary>
+    public bool IsCombo => ParallelPathsA != null && ParallelPathsA.Count > 0;
 
     public RocketExplosionData()
     {
         PathA = new List<Coordinate>();
         PathB = new List<Coordinate>();
+        ParallelPathsA = null; // null = not a combo
+        ParallelPathsB = null;
         DestroyedCubes = new List<Coordinate>();
         DamagedObstacles = new List<Coordinate>();
         DestroyedObstacles = new List<Coordinate>();

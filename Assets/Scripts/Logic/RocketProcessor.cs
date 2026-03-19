@@ -10,11 +10,10 @@ using System.Collections.Generic;
 /// ║ it adds the coordinate to TriggeredRockets but NEVER       ║
 /// ║ removes it from the board. Only ExplodeRocket() removes    ║
 /// ║ a rocket — the one it is currently exploding.              ║
-/// ║                                                            ║
-/// ║ This ensures the Orchestrator's queue loop can find and    ║
-/// ║ explode triggered rockets. Violating this breaks ALL       ║
-/// ║ chain reactions.                                           ║
 /// ╚══════════════════════════════════════════════════════════════╝
+///
+/// Combo paths are stored per-row/per-column in ParallelPathsA/B
+/// so the View can spawn 3 parallel projectiles per direction.
 /// </summary>
 public class RocketProcessor
 {
@@ -24,7 +23,7 @@ public class RocketProcessor
     public RocketProcessor(int seed) { _rand = new Random(seed); }
 
     // ==========================================
-    // CREATION (from 3A, unchanged)
+    // CREATION
     // ==========================================
 
     public RocketCreationData CreateRocket(Board board, Coordinate tappedCell, List<Coordinate> matchedCells)
@@ -49,14 +48,9 @@ public class RocketProcessor
     public bool QualifiesForRocket(int matchCount) => matchCount >= 4;
 
     // ==========================================
-    // SINGLE ROCKET EXPLOSION
+    // SINGLE ROCKET EXPLOSION (unchanged)
     // ==========================================
 
-    /// <summary>
-    /// Explode a single rocket at rocketCoord.
-    /// Removes THIS rocket from the board, then traces two paths.
-    /// Returns null if the cell doesn't contain a rocket.
-    /// </summary>
     public RocketExplosionData ExplodeRocket(Board board, Coordinate rocketCoord)
     {
         GridItem rocketItem = board.GetItem(rocketCoord);
@@ -66,10 +60,8 @@ public class RocketProcessor
         bool isHorizontal = rocketItem.Id == ItemIds.HorizontalRocket;
         string rocketId = rocketItem.Id;
 
-        // Remove THIS rocket (the one being exploded RIGHT NOW)
         board.SetItem(rocketCoord, ItemFactory.CreateEmpty());
 
-        // Dedup set prevents the same rocket appearing in TriggeredRockets twice
         HashSet<Coordinate> triggeredSet = new HashSet<Coordinate>();
 
         RocketExplosionData data = new RocketExplosionData
@@ -79,6 +71,7 @@ public class RocketProcessor
             RocketId = rocketId
         };
 
+        // Single rocket: PathA/PathB (1 path each direction)
         if (isHorizontal)
         {
             TracePath(board, rocketCoord, -1, 0, data.PathA, data, triggeredSet);
@@ -98,22 +91,25 @@ public class RocketProcessor
     // ==========================================
 
     /// <summary>
-    /// 3×3 area explosion + rockets in both horizontal and vertical directions.
+    /// 3×3 area explosion + 3-wide rockets in both horizontal and vertical directions.
     /// Returns two RocketExplosionData: [0]=horizontal, [1]=vertical.
-    /// Animated in parallel by the Orchestrator.
+    ///
+    /// Each explosion data uses ParallelPathsA/ParallelPathsB (3 paths per direction)
+    /// so the View can spawn 3 parallel projectiles per direction.
+    ///
+    /// Damage data (DestroyedCubes, etc.) is the aggregate across all paths.
     /// </summary>
     public List<RocketExplosionData> ProcessCombo(
         Board board, Coordinate tappedRocket, List<Coordinate> adjacentRockets)
     {
         List<RocketExplosionData> explosions = new List<RocketExplosionData>();
 
-        // 1. Remove ALL involved rockets (tapped + adjacent)
-        //    These are the combo participants — they merge, not chain-trigger.
+        // 1. Remove ALL involved rockets
         board.SetItem(tappedRocket, ItemFactory.CreateEmpty());
         foreach (var adj in adjacentRockets)
             board.SetItem(adj, ItemFactory.CreateEmpty());
 
-        // 2. Process 3×3 area — shared state across both explosion data
+        // 2. Process 3×3 area
         HashSet<Coordinate> processed = new HashSet<Coordinate>();
         HashSet<Coordinate> triggeredSet = new HashSet<Coordinate>();
 
@@ -136,9 +132,7 @@ public class RocketProcessor
             }
         }
 
-        // In ProcessCombo, replace steps 3 and 4:
-
-        // 3. Horizontal explosion — 3 parallel rows (y-1, y, y+1)
+        // 3. Horizontal explosion — 3 rows, each stored as a separate path
         RocketExplosionData horizData = new RocketExplosionData
         {
             Origin = tappedRocket,
@@ -148,50 +142,66 @@ public class RocketProcessor
             DamagedObstacles = new List<Coordinate>(damagedObstacles3x3),
             DestroyedObstacles = new List<Coordinate>(destroyedObstacles3x3),
             DestroyedObstacleInfos = new List<DestroyedObstacleInfo>(destroyedInfos3x3),
-            TriggeredRockets = new List<Coordinate>(triggeredSet)
+            TriggeredRockets = new List<Coordinate>(triggeredSet),
+            ParallelPathsA = new List<List<Coordinate>>(),
+            ParallelPathsB = new List<List<Coordinate>>()
         };
 
-        // 3 rows going LEFT
+        // 3 rows going LEFT (y-1, y, y+1)
         for (int dy = -1; dy <= 1; dy++)
         {
+            List<Coordinate> rowPath = new List<Coordinate>();
             Coordinate rowOrigin = new Coordinate(tappedRocket.x, tappedRocket.y + dy);
-            TracePathCombo(board, rowOrigin, -1, 0, horizData.PathA, horizData, processed, triggeredSet);
+            TracePathCombo(board, rowOrigin, -1, 0, rowPath, horizData, processed, triggeredSet);
+            horizData.ParallelPathsA.Add(rowPath);
         }
-        // 3 rows going RIGHT
+
+        // 3 rows going RIGHT (y-1, y, y+1)
         for (int dy = -1; dy <= 1; dy++)
         {
+            List<Coordinate> rowPath = new List<Coordinate>();
             Coordinate rowOrigin = new Coordinate(tappedRocket.x, tappedRocket.y + dy);
-            TracePathCombo(board, rowOrigin, 1, 0, horizData.PathB, horizData, processed, triggeredSet);
+            TracePathCombo(board, rowOrigin, 1, 0, rowPath, horizData, processed, triggeredSet);
+            horizData.ParallelPathsB.Add(rowPath);
         }
+
         explosions.Add(horizData);
 
-        // 4. Vertical explosion — 3 parallel columns (x-1, x, x+1)
+        // 4. Vertical explosion — 3 columns, each stored as a separate path
         RocketExplosionData vertData = new RocketExplosionData
         {
             Origin = tappedRocket,
             IsHorizontal = false,
-            RocketId = ItemIds.VerticalRocket
+            RocketId = ItemIds.VerticalRocket,
+            ParallelPathsA = new List<List<Coordinate>>(),
+            ParallelPathsB = new List<List<Coordinate>>()
         };
 
-        // 3 columns going DOWN
+        // 3 columns going DOWN (x-1, x, x+1)
         for (int dx = -1; dx <= 1; dx++)
         {
+            List<Coordinate> colPath = new List<Coordinate>();
             Coordinate colOrigin = new Coordinate(tappedRocket.x + dx, tappedRocket.y);
-            TracePathCombo(board, colOrigin, 0, -1, vertData.PathA, vertData, processed, triggeredSet);
+            TracePathCombo(board, colOrigin, 0, -1, colPath, vertData, processed, triggeredSet);
+            vertData.ParallelPathsA.Add(colPath);
         }
-        // 3 columns going UP
+
+        // 3 columns going UP (x-1, x, x+1)
         for (int dx = -1; dx <= 1; dx++)
         {
+            List<Coordinate> colPath = new List<Coordinate>();
             Coordinate colOrigin = new Coordinate(tappedRocket.x + dx, tappedRocket.y);
-            TracePathCombo(board, colOrigin, 0, 1, vertData.PathB, vertData, processed, triggeredSet);
+            TracePathCombo(board, colOrigin, 0, 1, colPath, vertData, processed, triggeredSet);
+            vertData.ParallelPathsB.Add(colPath);
         }
+
         explosions.Add(vertData);
 
         return explosions;
     }
 
     // ==========================================
-    // PATH TRACING
+    // PATH TRACING (unchanged)
     // ==========================================
 
     private void TracePath(
@@ -215,9 +225,7 @@ public class RocketProcessor
             }
             else if (item.IsRocket)
             {
-                // *** CRITICAL: DO NOT remove from board ***
-                // ExplodeRocket() handles removal when the queue processes it.
-                if (triggeredSet.Add(cell)) // Add returns false if already present
+                if (triggeredSet.Add(cell))
                     data.TriggeredRockets.Add(cell);
             }
             else if (item.IsCube)
@@ -276,13 +284,9 @@ public class RocketProcessor
     }
 
     // ==========================================
-    // CELL DAMAGE HELPERS
+    // CELL DAMAGE HELPERS (unchanged)
     // ==========================================
 
-    /// <summary>
-    /// Process damage for 3×3 combo area. Uses separate output lists.
-    /// Rockets are NOT removed — only added to triggeredSet.
-    /// </summary>
     private void ProcessCellDamage(
         Board board, Coordinate cell,
         List<Coordinate> destroyedCubes,
@@ -296,7 +300,6 @@ public class RocketProcessor
 
         if (item.IsRocket)
         {
-            // *** CRITICAL: DO NOT remove from board ***
             triggeredSet.Add(cell);
             return;
         }
@@ -329,10 +332,6 @@ public class RocketProcessor
         }
     }
 
-    /// <summary>
-    /// Apply damage to an obstacle, recording results in the explosion data.
-    /// Shared between TracePath and TracePathCombo.
-    /// </summary>
     private void ApplyObstacleDamage(
         Board board, Coordinate cell, GridItem item,
         DamageSource source, RocketExplosionData data)
