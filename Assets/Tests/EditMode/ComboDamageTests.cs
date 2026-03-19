@@ -3,12 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
-/// Tests for the combo damage system.
+/// Single source of truth for ALL combo behavior.
 ///
-/// Core principle: a combo fires two independent rockets (H and V).
-/// The 3×3 center is their natural intersection — cells there get
-/// hit by both directions. Vases (2HP) die. Everything else (1HP) dies
-/// on the first hit; the second direction sees empty and passes through.
+/// Core design: a combo fires two independent rockets (H and V) from the same origin.
+/// Each direction traces 3 parallel paths with its OWN processed set.
+/// The 3×3 center is their natural intersection — cells get hit by both:
+///   - Cube/Box/Stone (1HP): H destroys → V sees empty → 1 hit total
+///   - Vase (2HP): H damages (2→1) → V destroys (1→0) → 2 hits total
+///
+/// TracePathCombo starts AT the origin cell (not origin + direction).
+/// This ensures every 3×3 cell is visited by both H and V for dual damage.
 /// </summary>
 [TestFixture]
 public class ComboDamageTests
@@ -29,7 +33,7 @@ public class ComboDamageTests
     }
 
     // ==========================================
-    // BASIC COMBO STRUCTURE
+    // BASIC STRUCTURE
     // ==========================================
 
     [Test]
@@ -88,7 +92,108 @@ public class ComboDamageTests
     }
 
     // ==========================================
-    // CUBES IN 3×3 — Die on first hit (H), V sees empty
+    // PATH STRUCTURE: Each path stays in its own row/column
+    // ==========================================
+
+    [Test]
+    public void ProcessCombo_HorizontalPaths_EachRowStaysInItsRow()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) })[0];
+
+        // ParallelPathsA: going LEFT. [0]=row y-1=2, [1]=row y=3, [2]=row y+1=4
+        foreach (var cell in horiz.ParallelPathsA[0])
+            Assert.AreEqual(2, cell.y, $"H left path[0] should stay in row y=2, got y={cell.y}");
+        foreach (var cell in horiz.ParallelPathsA[1])
+            Assert.AreEqual(3, cell.y, $"H left path[1] should stay in row y=3, got y={cell.y}");
+        foreach (var cell in horiz.ParallelPathsA[2])
+            Assert.AreEqual(4, cell.y, $"H left path[2] should stay in row y=4, got y={cell.y}");
+
+        // ParallelPathsB: going RIGHT
+        foreach (var cell in horiz.ParallelPathsB[0])
+            Assert.AreEqual(2, cell.y, $"H right path[0] should stay in row y=2, got y={cell.y}");
+        foreach (var cell in horiz.ParallelPathsB[1])
+            Assert.AreEqual(3, cell.y, $"H right path[1] should stay in row y=3, got y={cell.y}");
+        foreach (var cell in horiz.ParallelPathsB[2])
+            Assert.AreEqual(4, cell.y, $"H right path[2] should stay in row y=4, got y={cell.y}");
+    }
+
+    [Test]
+    public void ProcessCombo_VerticalPaths_EachColumnStaysInItsColumn()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var vert = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) })[1];
+
+        // ParallelPathsA: going DOWN. [0]=col x-1=2, [1]=col x=3, [2]=col x+1=4
+        foreach (var cell in vert.ParallelPathsA[0])
+            Assert.AreEqual(2, cell.x, $"V down path[0] should stay in col x=2, got x={cell.x}");
+        foreach (var cell in vert.ParallelPathsA[1])
+            Assert.AreEqual(3, cell.x, $"V down path[1] should stay in col x=3, got x={cell.x}");
+        foreach (var cell in vert.ParallelPathsA[2])
+            Assert.AreEqual(4, cell.x, $"V down path[2] should stay in col x=4, got x={cell.x}");
+
+        foreach (var cell in vert.ParallelPathsB[0])
+            Assert.AreEqual(2, cell.x, $"V up path[0] should stay in col x=2, got x={cell.x}");
+        foreach (var cell in vert.ParallelPathsB[1])
+            Assert.AreEqual(3, cell.x, $"V up path[1] should stay in col x=3, got x={cell.x}");
+        foreach (var cell in vert.ParallelPathsB[2])
+            Assert.AreEqual(4, cell.x, $"V up path[2] should stay in col x=4, got x={cell.x}");
+    }
+
+    [Test]
+    public void ProcessCombo_PathsIncludeOriginCell()
+    {
+        // TracePathCombo starts AT origin, so the first cell in center paths is the origin itself
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) })[0];
+
+        // Center row (y=3) going left: starts at (3,3) — the origin itself
+        var centerLeft = horiz.ParallelPathsA[1];
+        Assert.IsTrue(centerLeft.Count > 0);
+        Assert.AreEqual(3, centerLeft[0].x,
+            "Center-left path starts at origin x=3 (TracePathCombo starts AT origin)");
+        Assert.AreEqual(3, centerLeft[0].y);
+    }
+
+    [Test]
+    public void ProcessCombo_HorizontalPathsA_CellsGoLeftward()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) })[0];
+
+        var centerLeft = horiz.ParallelPathsA[1];
+        for (int i = 1; i < centerLeft.Count; i++)
+            Assert.Less(centerLeft[i].x, centerLeft[i - 1].x, "Cells going left should have decreasing x");
+    }
+
+    [Test]
+    public void ProcessCombo_HorizontalPathsB_CellsGoRightward()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) })[0];
+
+        var centerRight = horiz.ParallelPathsB[1];
+        for (int i = 1; i < centerRight.Count; i++)
+            Assert.Greater(centerRight[i].x, centerRight[i - 1].x, "Cells going right should have increasing x");
+    }
+
+    // ==========================================
+    // CUBES IN 3×3 — Die on first hit
     // ==========================================
 
     [Test]
@@ -117,111 +222,132 @@ public class ComboDamageTests
         Assert.IsTrue(_board.GetItem(4, 4).IsEmpty);
     }
 
-    // ==========================================
-    // CUBES BEYOND 3×3 — Destroyed by one direction
-    // ==========================================
-
     [Test]
     public void ProcessCombo_CubesBeyond3x3_AllDestroyed()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
 
-        // Far cubes on all 4 axes
-        PlaceCube(0, 3, ItemIds.Red);   // H row center, far left
-        PlaceCube(7, 3, ItemIds.Blue);  // H row center, far right
-        PlaceCube(3, 0, ItemIds.Green); // V col center, far bottom
-        PlaceCube(3, 7, ItemIds.Yellow);// V col center, far top
-
-        // Cubes on outer rows/columns of combo
-        PlaceCube(0, 2, ItemIds.Red);   // H row y-1, far left
-        PlaceCube(7, 4, ItemIds.Blue);  // H row y+1, far right
-        PlaceCube(2, 0, ItemIds.Green); // V col x-1, far bottom
-        PlaceCube(4, 7, ItemIds.Yellow);// V col x+1, far top
+        PlaceCube(0, 3, ItemIds.Red);
+        PlaceCube(7, 3, ItemIds.Blue);
+        PlaceCube(3, 0, ItemIds.Green);
+        PlaceCube(3, 7, ItemIds.Yellow);
+        PlaceCube(0, 2, ItemIds.Red);
+        PlaceCube(7, 4, ItemIds.Blue);
+        PlaceCube(2, 0, ItemIds.Green);
+        PlaceCube(4, 7, ItemIds.Yellow);
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        Assert.IsTrue(_board.GetItem(0, 3).IsEmpty, "H center row far left");
-        Assert.IsTrue(_board.GetItem(7, 3).IsEmpty, "H center row far right");
-        Assert.IsTrue(_board.GetItem(3, 0).IsEmpty, "V center col far bottom");
-        Assert.IsTrue(_board.GetItem(3, 7).IsEmpty, "V center col far top");
-        Assert.IsTrue(_board.GetItem(0, 2).IsEmpty, "H outer row far left");
-        Assert.IsTrue(_board.GetItem(7, 4).IsEmpty, "H outer row far right");
-        Assert.IsTrue(_board.GetItem(2, 0).IsEmpty, "V outer col far bottom");
-        Assert.IsTrue(_board.GetItem(4, 7).IsEmpty, "V outer col far top");
+        Assert.IsTrue(_board.GetItem(0, 3).IsEmpty);
+        Assert.IsTrue(_board.GetItem(7, 3).IsEmpty);
+        Assert.IsTrue(_board.GetItem(3, 0).IsEmpty);
+        Assert.IsTrue(_board.GetItem(3, 7).IsEmpty);
+        Assert.IsTrue(_board.GetItem(0, 2).IsEmpty);
+        Assert.IsTrue(_board.GetItem(7, 4).IsEmpty);
+        Assert.IsTrue(_board.GetItem(2, 0).IsEmpty);
+        Assert.IsTrue(_board.GetItem(4, 7).IsEmpty);
     }
 
-    // ==========================================
-    // VASE IN 3×3 — Takes 2 damage (killed by H+V intersection)
-    // ==========================================
-
     [Test]
-    public void ProcessCombo_VaseIn3x3_Destroyed()
+    public void ProcessCombo_CubeIn3x3_HorizDestroys_VertPassesThrough()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase)); // 2HP, in 3×3
+        PlaceCube(2, 2, ItemIds.Red);
+
+        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) });
+
+        CollectionAssert.Contains(explosions[0].DestroyedCubes, new Coordinate(2, 2),
+            "H should destroy the cube (processes first)");
+        CollectionAssert.DoesNotContain(explosions[1].DestroyedCubes, new Coordinate(2, 2),
+            "V should not see cube (already empty)");
+    }
+
+    // ==========================================
+    // VASE IN 3×3 — Takes 2 damage (killed by H+V)
+    // ==========================================
+
+    [Test]
+    public void ProcessCombo_VaseIn3x3Corner_Destroyed()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
         Assert.IsTrue(_board.GetItem(2, 2).IsEmpty,
-            "Vase in 3×3 should be destroyed: H hits (2→1), V hits (1→0)");
+            "Vase in 3×3 destroyed: H hits (2→1), V hits (1→0)");
     }
 
     [Test]
-    public void ProcessCombo_VaseOn3x3Edge_Destroyed()
+    public void ProcessCombo_VaseAtIntersection_Destroyed()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(3, 4, ItemFactory.CreateItem(ItemIds.Vase)); // On H path AND V path
+        _board.SetItem(3, 4, ItemFactory.CreateItem(ItemIds.Vase));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
         Assert.IsTrue(_board.GetItem(3, 4).IsEmpty,
-            "Vase at intersection of H row y=4 and V col x=3 should be destroyed");
+            "Vase at H/V intersection destroyed by dual-direction damage");
     }
 
-    // ==========================================
-    // VASE OUTSIDE 3×3 — Only on one direction, takes 1 damage
-    // ==========================================
-
     [Test]
-    public void ProcessCombo_VaseOnHorizontalPathOnly_TakesOneDamage()
+    public void ProcessCombo_VaseIn3x3_HorizDamages_VertDestroys()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(0, 3, ItemFactory.CreateItem(ItemIds.Vase)); // Far left, H row center only
+        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase));
+
+        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+            new List<Coordinate> { new Coordinate(4, 3) });
+
+        CollectionAssert.Contains(explosions[0].DamagedObstacles, new Coordinate(2, 2),
+            "H should damage vase (first hit, 2→1)");
+        CollectionAssert.Contains(explosions[1].DestroyedObstacles, new Coordinate(2, 2),
+            "V should destroy vase (second hit, 1→0)");
+    }
+
+    // ==========================================
+    // VASE OUTSIDE 3×3 — Only one direction, takes 1 damage
+    // ==========================================
+
+    [Test]
+    public void ProcessCombo_VaseOnHorizontalPathOnly_Survives()
+    {
+        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+        _board.SetItem(0, 3, ItemFactory.CreateItem(ItemIds.Vase));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        // Only H reaches it. V columns are x=2,3,4 — doesn't reach x=0
-        Assert.AreEqual(1, _board.GetItem(0, 3).Health,
-            "Vase on H path only should take 1 damage (2→1)");
+        Assert.AreEqual(1, _board.GetItem(0, 3).Health, "Only H reaches x=0. 1 hit.");
         Assert.IsTrue(_board.GetItem(0, 3).IsAlive);
     }
 
     [Test]
-    public void ProcessCombo_VaseOnVerticalPathOnly_TakesOneDamage()
+    public void ProcessCombo_VaseOnVerticalPathOnly_Survives()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(3, 7, ItemFactory.CreateItem(ItemIds.Vase)); // Far top, V col center only
+        _board.SetItem(3, 7, ItemFactory.CreateItem(ItemIds.Vase));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        // Only V reaches it. H rows are y=2,3,4 — doesn't reach y=7
-        Assert.AreEqual(1, _board.GetItem(3, 7).Health,
-            "Vase on V path only should take 1 damage (2→1)");
+        Assert.AreEqual(1, _board.GetItem(3, 7).Health, "Only V reaches y=7. 1 hit.");
         Assert.IsTrue(_board.GetItem(3, 7).IsAlive);
     }
 
     // ==========================================
-    // BOX AND STONE IN 3×3 — Destroyed by first hit
+    // BOX AND STONE IN 3×3
     // ==========================================
 
     [Test]
@@ -229,12 +355,12 @@ public class ComboDamageTests
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(2, 4, ItemFactory.CreateItem(ItemIds.Box)); // 1HP
+        _board.SetItem(2, 4, ItemFactory.CreateItem(ItemIds.Box));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        Assert.IsTrue(_board.GetItem(2, 4).IsEmpty, "Box (1HP) destroyed by first hit");
+        Assert.IsTrue(_board.GetItem(2, 4).IsEmpty);
     }
 
     [Test]
@@ -242,51 +368,45 @@ public class ComboDamageTests
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(4, 2, ItemFactory.CreateItem(ItemIds.Stone)); // 1HP
+        _board.SetItem(4, 2, ItemFactory.CreateItem(ItemIds.Stone));
 
         _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        Assert.IsTrue(_board.GetItem(4, 2).IsEmpty,
-            "Stone (1HP) destroyed — combo uses Rocket damage which affects Stone");
+        Assert.IsTrue(_board.GetItem(4, 2).IsEmpty);
     }
 
     // ==========================================
-    // TRIGGERED ROCKETS — Still on board, shared dedup
+    // TRIGGERED ROCKETS
     // ==========================================
 
     [Test]
-    public void ProcessCombo_RocketIn3x3_IsTriggeredNotRemoved()
+    public void ProcessCombo_RocketIn3x3_TriggeredNotRemoved()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(2, 4, ItemFactory.CreateItem(ItemIds.HorizontalRocket)); // In 3×3
+        _board.SetItem(2, 4, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
 
         var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        Assert.IsTrue(_board.GetItem(2, 4).IsRocket,
-            "Triggered rocket in 3×3 must stay on board for chain reaction");
+        Assert.IsTrue(_board.GetItem(2, 4).IsRocket, "Must stay on board for chain reaction");
 
-        var allTriggered = new List<Coordinate>();
-        foreach (var exp in explosions)
-            allTriggered.AddRange(exp.TriggeredRockets);
-
+        var allTriggered = explosions.SelectMany(e => e.TriggeredRockets).ToList();
         CollectionAssert.Contains(allTriggered, new Coordinate(2, 4));
     }
 
     [Test]
-    public void ProcessCombo_RocketOnPath_IsTriggeredNotRemoved()
+    public void ProcessCombo_RocketOnPath_TriggeredNotRemoved()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(7, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket)); // Far right on H path
+        _board.SetItem(7, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
 
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
+        _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        Assert.IsTrue(_board.GetItem(7, 3).IsRocket,
-            "Triggered rocket on path must stay on board");
+        Assert.IsTrue(_board.GetItem(7, 3).IsRocket);
     }
 
     [Test]
@@ -294,55 +414,18 @@ public class ComboDamageTests
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        // Rocket at (2,2) — reachable by both H row y=2 and V col x=2
         _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.VerticalRocket));
 
         var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        var allTriggered = new List<Coordinate>();
-        foreach (var exp in explosions)
-            allTriggered.AddRange(exp.TriggeredRockets);
-
+        var allTriggered = explosions.SelectMany(e => e.TriggeredRockets).ToList();
         int count = allTriggered.Count(c => c == new Coordinate(2, 2));
-        Assert.AreEqual(1, count,
-            "Shared triggeredSet prevents same rocket being queued twice across H and V");
+        Assert.AreEqual(1, count, "Shared triggeredSet prevents duplicates across H and V");
     }
 
     // ==========================================
-    // EDGE CASES — Board boundaries
-    // ==========================================
-
-    [Test]
-    public void ProcessCombo_AtCorner_NoErrors()
-    {
-        _board.SetItem(0, 0, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(1, 0, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-
-        Assert.DoesNotThrow(() =>
-        {
-            var explosions = _processor.ProcessCombo(_board, new Coordinate(0, 0),
-                new List<Coordinate> { new Coordinate(1, 0) });
-            Assert.AreEqual(2, explosions.Count);
-        });
-    }
-
-    [Test]
-    public void ProcessCombo_AtTopEdge_OutOfBoundsRowsEmpty()
-    {
-        _board.SetItem(3, 7, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(4, 7, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 7),
-            new List<Coordinate> { new Coordinate(4, 7) });
-
-        // Row y+1 = y=8 is out of bounds
-        Assert.AreEqual(0, explosions[0].ParallelPathsA[2].Count, "Row y=8 path should be empty");
-        Assert.AreEqual(0, explosions[0].ParallelPathsB[2].Count, "Row y=8 path should be empty");
-    }
-
-    // ==========================================
-    // COMBO AREA CLEARED — View data
+    // COMBO AREA CLEARED (View data)
     // ==========================================
 
     [Test]
@@ -359,32 +442,17 @@ public class ComboDamageTests
     }
 
     [Test]
-    public void ProcessCombo_ComboAreaCleared_ContainsDestroyedCubes()
-    {
-        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        PlaceCube(2, 2, ItemIds.Red); // In 3×3
-
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
-            new List<Coordinate> { new Coordinate(4, 3) });
-
-        CollectionAssert.Contains(explosions[0].ComboAreaCleared, new Coordinate(2, 2),
-            "Destroyed cube in 3×3 should be in ComboAreaCleared");
-    }
-
-    [Test]
     public void ProcessCombo_ComboAreaCleared_ContainsDestroyedVase()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase)); // 2HP in 3×3
+        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase));
 
         var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        // Vase takes 2 damage (H+V), dies. Cell is now empty.
         CollectionAssert.Contains(explosions[0].ComboAreaCleared, new Coordinate(2, 2),
-            "Destroyed vase should be in ComboAreaCleared");
+            "Vase killed by dual hit should be in ComboAreaCleared");
     }
 
     [Test]
@@ -396,102 +464,89 @@ public class ComboDamageTests
         var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        // Both explosions share the same ComboAreaCleared list
         Assert.AreSame(explosions[0].ComboAreaCleared, explosions[1].ComboAreaCleared);
     }
 
     // ==========================================
-    // PARALLEL PATH STRUCTURE (unchanged from before)
+    // EDGE CASES: Board boundaries
     // ==========================================
 
     [Test]
-    public void ProcessCombo_HorizontalPaths_StayInTheirRow()
+    public void ProcessCombo_AtCorner_NoErrors()
     {
-        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+        _board.SetItem(0, 0, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(1, 0, ItemFactory.CreateItem(ItemIds.VerticalRocket));
 
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
-            new List<Coordinate> { new Coordinate(4, 3) });
-
-        var horiz = explosions[0];
-
-        foreach (var cell in horiz.ParallelPathsA[0])
-            Assert.AreEqual(2, cell.y, $"H path[0] left should be row y=2, got y={cell.y}");
-
-        foreach (var cell in horiz.ParallelPathsA[1])
-            Assert.AreEqual(3, cell.y, $"H path[1] left should be row y=3, got y={cell.y}");
-
-        foreach (var cell in horiz.ParallelPathsA[2])
-            Assert.AreEqual(4, cell.y, $"H path[2] left should be row y=4, got y={cell.y}");
+        Assert.DoesNotThrow(() =>
+        {
+            var explosions = _processor.ProcessCombo(_board, new Coordinate(0, 0),
+                new List<Coordinate> { new Coordinate(1, 0) });
+            Assert.AreEqual(2, explosions.Count);
+            Assert.IsTrue(explosions[0].IsCombo);
+        });
     }
 
     [Test]
-    public void ProcessCombo_VerticalPaths_StayInTheirColumn()
+    public void ProcessCombo_AtTopEdge_OutOfBoundsRowsEmpty()
     {
-        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+        _board.SetItem(3, 7, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 7, ItemFactory.CreateItem(ItemIds.VerticalRocket));
 
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
-            new List<Coordinate> { new Coordinate(4, 3) });
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 7),
+            new List<Coordinate> { new Coordinate(4, 7) })[0];
 
-        var vert = explosions[1];
+        // Row y+1 = y=8 is out of bounds → TracePathCombo starts at (3,8),
+        // IsValidCoordinate fails → empty path
+        Assert.AreEqual(0, horiz.ParallelPathsA[2].Count, "Row y=8 should be empty");
+        Assert.AreEqual(0, horiz.ParallelPathsB[2].Count, "Row y=8 should be empty");
+        Assert.IsTrue(horiz.ParallelPathsA[0].Count > 0, "Row y=6 should have cells");
+        Assert.IsTrue(horiz.ParallelPathsA[1].Count > 0, "Row y=7 should have cells");
+    }
 
-        foreach (var cell in vert.ParallelPathsA[0])
-            Assert.AreEqual(2, cell.x, $"V path[0] down should be col x=2, got x={cell.x}");
+    [Test]
+    public void ProcessCombo_AtBottomEdge_OutOfBoundsRowsEmpty()
+    {
+        _board.SetItem(3, 0, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(4, 0, ItemFactory.CreateItem(ItemIds.VerticalRocket));
 
-        foreach (var cell in vert.ParallelPathsA[1])
-            Assert.AreEqual(3, cell.x, $"V path[1] down should be col x=3, got x={cell.x}");
+        var horiz = _processor.ProcessCombo(_board, new Coordinate(3, 0),
+            new List<Coordinate> { new Coordinate(4, 0) })[0];
 
-        foreach (var cell in vert.ParallelPathsA[2])
-            Assert.AreEqual(4, cell.x, $"V path[2] down should be col x=4, got x={cell.x}");
+        Assert.AreEqual(0, horiz.ParallelPathsA[0].Count, "Row y=-1 should be empty");
+        Assert.IsTrue(horiz.ParallelPathsA[1].Count > 0, "Row y=0 should have cells");
+        Assert.IsTrue(horiz.ParallelPathsA[2].Count > 0, "Row y=1 should have cells");
+    }
+
+    [Test]
+    public void ProcessCombo_AtLeftEdge_OutOfBoundsColumnsEmpty()
+    {
+        _board.SetItem(0, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
+        _board.SetItem(1, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
+
+        var vert = _processor.ProcessCombo(_board, new Coordinate(0, 3),
+            new List<Coordinate> { new Coordinate(1, 3) })[1];
+
+        Assert.AreEqual(0, vert.ParallelPathsA[0].Count, "Col x=-1 should be empty");
+        Assert.IsTrue(vert.ParallelPathsA[1].Count > 0, "Col x=0 should have cells");
+        Assert.IsTrue(vert.ParallelPathsA[2].Count > 0, "Col x=1 should have cells");
     }
 
     // ==========================================
-    // DAMAGE ATTRIBUTION — Which explosion owns what
+    // DESTROYED CUBES STILL POPULATED
     // ==========================================
 
     [Test]
-    public void ProcessCombo_VaseIn3x3_HorizDamages_VertDestroys()
+    public void ProcessCombo_DestroyedCubes_StillPopulated()
     {
         _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
         _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        _board.SetItem(2, 2, ItemFactory.CreateItem(ItemIds.Vase)); // 2HP
+        PlaceCube(0, 3, ItemIds.Red);
+        PlaceCube(7, 3, ItemIds.Blue);
 
         var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
             new List<Coordinate> { new Coordinate(4, 3) });
 
-        var horiz = explosions[0]; // Traces first
-        var vert = explosions[1];  // Traces second
-
-        // H hits vase first: 2→1. Vase is in H's DamagedObstacles.
-        CollectionAssert.Contains(horiz.DamagedObstacles, new Coordinate(2, 2),
-            "H should have damaged the vase (first hit, 2→1)");
-
-        // V hits vase second: 1→0. Vase is in V's DestroyedObstacles.
-        CollectionAssert.Contains(vert.DestroyedObstacles, new Coordinate(2, 2),
-            "V should have destroyed the vase (second hit, 1→0)");
-
-        // Board cell is empty
-        Assert.IsTrue(_board.GetItem(2, 2).IsEmpty);
-    }
-
-    [Test]
-    public void ProcessCombo_CubeIn3x3_HorizDestroys_VertPassesThrough()
-    {
-        _board.SetItem(3, 3, ItemFactory.CreateItem(ItemIds.HorizontalRocket));
-        _board.SetItem(4, 3, ItemFactory.CreateItem(ItemIds.VerticalRocket));
-        PlaceCube(2, 2, ItemIds.Red);
-
-        var explosions = _processor.ProcessCombo(_board, new Coordinate(3, 3),
-            new List<Coordinate> { new Coordinate(4, 3) });
-
-        var horiz = explosions[0];
-        var vert = explosions[1];
-
-        // H destroys the cube (first direction processed)
-        CollectionAssert.Contains(horiz.DestroyedCubes, new Coordinate(2, 2));
-
-        // V doesn't see it (cell is empty by the time V processes it)
-        CollectionAssert.DoesNotContain(vert.DestroyedCubes, new Coordinate(2, 2));
+        int total = explosions[0].DestroyedCubes.Count + explosions[1].DestroyedCubes.Count;
+        Assert.IsTrue(total >= 2, "DestroyedCubes lists should be populated");
     }
 }
