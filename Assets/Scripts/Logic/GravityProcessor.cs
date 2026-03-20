@@ -2,12 +2,13 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Pure C# gravity and refill logic. No UnityEngine dependency.
-/// 
+///
 /// Key rules from Case Study:
 /// - Items fall vertically into empty cells
 /// - Non-movable items (Box, Stone) block falling — cubes cannot pass through them
 /// - Movable obstacles (Vase) DO fall
 /// - New random cubes spawn from above to fill remaining gaps
+/// - Empty cells BELOW non-movable obstacles are unreachable — they do NOT get refilled
 /// </summary>
 public class GravityProcessor
 {
@@ -62,7 +63,14 @@ public class GravityProcessor
 
     /// <summary>
     /// Fill remaining empty cells with new random cubes falling from above.
-    /// StartPos is above the visible board so the View can animate them sliding in.
+    ///
+    /// CRITICAL RULE: Only fills empty cells that are reachable from the top
+    /// of the column. When a non-movable obstacle (Box, Stone) is encountered
+    /// while scanning downward, all cells below it are sealed — no new cubes
+    /// can reach them from above.
+    ///
+    /// After ApplyGravity, the top segment of each column has items packed
+    /// at the bottom with empties at the top. We fill those empties.
     /// </summary>
     public List<ItemMovement> FillEmptySpaces(Board board)
     {
@@ -70,21 +78,21 @@ public class GravityProcessor
 
         for (int x = 0; x < board.Width; x++)
         {
-            // Count how many new items we've spawned in this column
-            // (used to stagger their spawn positions above the board)
             int spawnOffset = 0;
 
-            for (int y = 0; y < board.Height; y++)
+            // Scan from TOP down — fill empties until hitting an obstacle
+            for (int y = board.Height - 1; y >= 0; y--)
             {
                 Coordinate current = new Coordinate(x, y);
+                GridItem item = board.GetItem(current);
 
-                if (board.GetItem(current).IsEmpty)
+                if (item.IsEmpty)
                 {
                     GridItem newItem = ItemFactory.CreateRandomCube();
                     board.SetItem(current, newItem);
 
-                    // Spawn position is above the board, staggered so
-                    // multiple new items in the same column don't overlap
+                    // Spawn above the board, staggered so multiple items
+                    // in the same column don't overlap visually
                     Coordinate spawnPos = new Coordinate(x, board.Height + spawnOffset);
                     spawnOffset++;
 
@@ -95,6 +103,13 @@ public class GravityProcessor
                         ItemId = newItem.Id
                     });
                 }
+                else if (!item.IsMovable)
+                {
+                    // Non-movable obstacle — everything below is sealed.
+                    // No new cubes can enter from above past this point.
+                    break;
+                }
+                // Movable items (cubes, rockets, vases): skip, keep scanning down
             }
         }
 

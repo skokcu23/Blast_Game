@@ -1499,7 +1499,21 @@ MonoBehaviour:
   _horizontalPartRightSprite: {fileID: -4731576832940087401, guid: e2786fdded3b92f8598274141d78dee8, type: 3}
   _verticalPartTopSprite: {fileID: 51141016974189086, guid: 50b47ecaae6fadc52bc40d04bd4970a7, type: 3}
   _verticalPartBottomSprite: {fileID: -4697989437084310921, guid: 162f963d615d56ed4a78b204e8d41803, type: 3}
-  _levelBackground: {fileID: 0}
+  _particleBlue: {fileID: -600494540707355758, guid: c5b61171c452227b1ad1bcdb9da6cd45, type: 3}
+  _particleRed: {fileID: 8635282560227039426, guid: cf3f1c9a54bf188ea85fd0552689a26b, type: 3}
+  _particleGreen: {fileID: 3823634399010047068, guid: 590ab08cd94f5ae6dbac66b8ae3fb5c3, type: 3}
+  _particleYellow: {fileID: 6910005400417552955, guid: 843c2d014c94e67f68355fdc25b2eff2, type: 3}
+  _particleBox01: {fileID: 8033122460991593567, guid: 59b98a1bd2cd77f04b065d126be36c03, type: 3}
+  _particleBox02: {fileID: 2595786937247043147, guid: 80f7745c93540647189583efe7bfa0ff, type: 3}
+  _particleBox03: {fileID: 2053866050121038535, guid: 8a46b410530a4777b8b0cbb4908d5c3e, type: 3}
+  _particleStone01: {fileID: 4097111511846903190, guid: b4eda3445854feadfa6d0906f808a481, type: 3}
+  _particleStone02: {fileID: -2203629019558354351, guid: b4dc01a81e2737a2eaaf6bccf8554b08, type: 3}
+  _particleStone03: {fileID: 7798741131455143084, guid: 74aa2cc8445279d329dc9864160f3b46, type: 3}
+  _particleVase01: {fileID: 4095080387558074076, guid: a63cb0986812b2d9eac08cdd513aa2f8, type: 3}
+  _particleVase02: {fileID: 6406247513108631659, guid: 9013de8538c0e0c9098c8310921f0dbd, type: 3}
+  _particleVase03: {fileID: -2350886445216773880, guid: 326f48ae4e592060cb5adb1cbdd58bd9, type: 3}
+  _particleSmoke: {fileID: -4644287431084688493, guid: 81831f5094d7d22d4816311bf3c9bceb, type: 3}
+  _particleStar: {fileID: 2886466338421546167, guid: 60246723436b80b809df931ac67a1f34, type: 3}
 --- !u!4 &946308033
 Transform:
   m_ObjectHideFlags: 0
