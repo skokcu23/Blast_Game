@@ -101,7 +101,7 @@ public class CubeView : MonoBehaviour
         _spriteRenderer.sprite = hintSprite;
 
         DOTween.Kill(transform, "hint");
-        transform.DOPunchScale(Vector3.one * 0.12f, 0.25f, 1, 0)
+        transform.DOPunchScale(Vector3.one * 0.12f, 0.05f, 1, 0)
             .SetId("hint");
     }
 
@@ -114,7 +114,7 @@ public class CubeView : MonoBehaviour
         _spriteRenderer.sprite = _defaultSprite;
 
         DOTween.Kill(transform, "hint");
-        transform.DOPunchScale(Vector3.one * 0.08f, 0.2f, 1, 0)
+        transform.DOPunchScale(Vector3.one * 0.08f, 0.05f, 1, 0)
             .SetId("hint");
     }
 
