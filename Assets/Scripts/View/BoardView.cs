@@ -4,8 +4,8 @@ using UnityEngine;
 using DG.Tweening;
 
 /// <summary>
-/// Thin facade coordinating the three view subsystems.
-/// Clean API: each method takes only its DTO. No Board, no snapshots.
+/// Thin facade coordinating the four view subsystems:
+///   CubePool, GridStateManager, AnimationController, ParticleEffectController
 /// </summary>
 public class BoardView : MonoBehaviour
 {
@@ -40,9 +40,33 @@ public class BoardView : MonoBehaviour
     [SerializeField] private Sprite _verticalPartTopSprite;
     [SerializeField] private Sprite _verticalPartBottomSprite;
 
-    [Header("Background")]
-    [SerializeField] private SpriteRenderer _levelBackground;
+    [Header("Cube Particle Sprites")]
+    [SerializeField] private Sprite _particleBlue;
+    [SerializeField] private Sprite _particleRed;
+    [SerializeField] private Sprite _particleGreen;
+    [SerializeField] private Sprite _particleYellow;
 
+    [Header("Box Particle Sprites")]
+    [SerializeField] private Sprite _particleBox01;
+    [SerializeField] private Sprite _particleBox02;
+    [SerializeField] private Sprite _particleBox03;
+
+    [Header("Stone Particle Sprites")]
+    [SerializeField] private Sprite _particleStone01;
+    [SerializeField] private Sprite _particleStone02;
+    [SerializeField] private Sprite _particleStone03;
+
+    [Header("Vase Particle Sprites")]
+    [SerializeField] private Sprite _particleVase01;
+    [SerializeField] private Sprite _particleVase02;
+    [SerializeField] private Sprite _particleVase03;
+
+    [Header("Rocket Particle Sprites")]
+    [SerializeField] private Sprite _particleSmoke;
+    [SerializeField] private Sprite _particleStar;
+
+
+    // Public accessors for AnimationController
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
     public Sprite HorizontalPartRightSprite => _horizontalPartRightSprite;
     public Sprite VerticalPartTopSprite => _verticalPartTopSprite;
@@ -50,9 +74,11 @@ public class BoardView : MonoBehaviour
 
     public static readonly Vector3 CellScale = new Vector3(0.95f, 0.95f, 1f);
 
+    // Subsystems
     private CubePool _pool;
     private GridStateManager _gridState;
     private AnimationController _animator;
+    private ParticleEffectController _particles;
 
     private float _offsetX;
     private float _offsetY;
@@ -61,7 +87,8 @@ public class BoardView : MonoBehaviour
     {
         _pool = new CubePool(_cubePrefab, transform);
         _gridState = new GridStateManager(_pool, this);
-        _animator = new AnimationController(_gridState, this, transform);
+        _particles = new ParticleEffectController(transform);
+        _animator = new AnimationController(_gridState, this, _particles, transform);
     }
 
     // ==========================================
@@ -76,6 +103,7 @@ public class BoardView : MonoBehaviour
         _offsetY = (board.Height - 1) / 2f;
 
         _gridState.Clear();
+        _particles.ReturnAll();
         _pool.Prewarm(board.Width * board.Height + 20);
         _gridState.SpawnAll(board);
 
@@ -101,10 +129,6 @@ public class BoardView : MonoBehaviour
         _animator.PlayRocketSpawn(data);
     }
 
-    /// <summary>
-    /// Rocket spawn pause duration in seconds. Orchestrator uses this
-    /// for a DOTween-based delay that respects Time.timeScale.
-    /// </summary>
     public float RocketSpawnPause => _animator.RocketSpawnPause;
 
     public async Task AnimateRocketExplosion(RocketExplosionData data)
@@ -112,10 +136,6 @@ public class BoardView : MonoBehaviour
         await _animator.PlayRocketExplosion(data);
     }
 
-    /// <summary>
-    /// Combo explosion: 3×3 cleanup once, vase cracks once,
-    /// then H and V projectile animations in parallel.
-    /// </summary>
     public async Task AnimateComboExplosion(List<RocketExplosionData> explosions)
     {
         await _animator.PlayComboExplosion(explosions);
@@ -185,6 +205,42 @@ public class BoardView : MonoBehaviour
     };
 
     // ==========================================
+    // PARTICLE SPRITE LOOKUPS
+    // ==========================================
+
+    /// <summary>
+    /// Get the particle sprite for a cube color.
+    /// Returns null for non-cube items.
+    /// </summary>
+    public Sprite GetCubeParticleSprite(string itemId) => itemId switch
+    {
+        ItemIds.Blue => _particleBlue,
+        ItemIds.Red => _particleRed,
+        ItemIds.Green => _particleGreen,
+        ItemIds.Yellow => _particleYellow,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Get the particle sprites for an obstacle type.
+    /// Returns array of fragment sprites (randomly picked per particle).
+    /// Returns null for non-obstacle items.
+    /// </summary>
+    public Sprite[] GetObstacleParticleSprites(string itemId) => itemId switch
+    {
+        ItemIds.Box => new[] { _particleBox01, _particleBox02, _particleBox03 },
+        ItemIds.Stone => new[] { _particleStone01, _particleStone02, _particleStone03 },
+        ItemIds.Vase => new[] { _particleVase01, _particleVase02, _particleVase03 },
+        _ => null,
+    };
+
+    /// <summary>Smoke sprite for rocket trails and explosions.</summary>
+    public Sprite ParticleSmoke => _particleSmoke;
+
+    /// <summary>Star sprite for rocket explosion bursts.</summary>
+    public Sprite ParticleStar => _particleStar;
+
+    // ==========================================
     // CAMERA & BACKGROUND
     // ==========================================
 
@@ -206,19 +262,6 @@ public class BoardView : MonoBehaviour
         float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
 
-        if (_levelBackground != null && _levelBackground.sprite != null)
-        {
-            float cameraHeight = Camera.main.orthographicSize * 2f;
-            float cameraWidth = cameraHeight * Camera.main.aspect;
-            Vector2 spriteSize = _levelBackground.sprite.bounds.size;
 
-            float fillScale = Mathf.Max(cameraWidth / spriteSize.x, cameraHeight / spriteSize.y);
-            _levelBackground.transform.localScale = new Vector3(fillScale, fillScale, 1f);
-            _levelBackground.transform.position = new Vector3(
-                Camera.main.transform.position.x,
-                Camera.main.transform.position.y,
-                1f
-            );
-        }
     }
 }

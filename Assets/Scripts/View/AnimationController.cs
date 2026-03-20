@@ -6,16 +6,16 @@ using DG.Tweening;
 /// <summary>
 /// Purely cosmetic animation layer.
 ///
-/// Damage visuals: each step calls CrackDamagedVases() using pre-gravity
-/// coordinates from the step's DamagedObstacles list.
-///
-/// Combo: PlayComboExplosion handles 3×3 cleanup and vase cracks ONCE,
-/// then fires H and V projectiles in parallel. No redundant operations.
+/// Particles: fires color-matched burst effects during:
+///   - Cube pops (blast, rocket creation merge)
+///   - Obstacle destruction (blast, rocket path)
+///   - Projectile path cell destruction
 /// </summary>
 public class AnimationController
 {
     private readonly GridStateManager _gridState;
     private readonly BoardView _boardView;
+    private readonly ParticleEffectController _particles;
     private readonly Transform _parent;
 
     private const float POP_DURATION = 0.15f;
@@ -24,25 +24,54 @@ public class AnimationController
     private const float REFILL_DURATION = 0.35f;
     private const float PROJECTILE_SPEED = 0.03f;
     private const float ROCKET_SPAWN_DURATION = 0.25f;
-    private const float ROCKET_SPAWN_PAUSE = 0.2f; // Pause after rocket pop-in
+    private const float ROCKET_SPAWN_PAUSE = 0.2f;
 
     private const Ease GRAVITY_EASE = Ease.OutBounce;
     private const Ease REFILL_EASE = Ease.OutQuad;
     private const Ease MERGE_EASE = Ease.InQuad;
     private const Ease POP_EASE = Ease.OutBack;
 
-    public AnimationController(GridStateManager gridState, BoardView boardView, Transform parent)
+    public AnimationController(GridStateManager gridState, BoardView boardView,
+        ParticleEffectController particles, Transform parent)
     {
         _gridState = gridState;
         _boardView = boardView;
+        _particles = particles;
         _parent = parent;
     }
 
-    /// <summary>
-    /// Pause duration after rocket spawn animation (in seconds).
-    /// Public so the Orchestrator can use it for the DOTween delay.
-    /// </summary>
     public float RocketSpawnPause => ROCKET_SPAWN_PAUSE;
+
+    // ==========================================
+    // PARTICLES HELPER
+    // ==========================================
+
+    /// <summary>
+    /// Fire appropriate particles for a cell being destroyed.
+    /// Reads the CubeView's ItemId to determine cube vs obstacle particles.
+    /// </summary>
+    private void EmitDestructionParticles(CubeView view)
+    {
+        if (view == null) return;
+
+        Vector3 pos = view.transform.position;
+        string itemId = view.ItemId;
+
+        // Try cube particles first
+        Sprite cubeParticle = _boardView.GetCubeParticleSprite(itemId);
+        if (cubeParticle != null)
+        {
+            _particles.PlayCubeBurst(pos, cubeParticle);
+            return;
+        }
+
+        // Try obstacle particles
+        Sprite[] obstacleParticles = _boardView.GetObstacleParticleSprites(itemId);
+        if (obstacleParticles != null)
+        {
+            _particles.PlayObstacleBurst(pos, obstacleParticles);
+        }
+    }
 
     // ==========================================
     // CRACK HELPER
@@ -74,14 +103,20 @@ public class AnimationController
         {
             CubeView view = _gridState.GetCell(coord);
             if (view != null)
+            {
+                EmitDestructionParticles(view);
                 seq.Join(CreatePopTween(view, coord));
+            }
         }
 
         foreach (var coord in result.DestroyedObstacles)
         {
             CubeView view = _gridState.GetCell(coord);
             if (view != null)
+            {
+                EmitDestructionParticles(view);
                 seq.Join(CreatePopTween(view, coord));
+            }
         }
 
         await seq.ToTask();
@@ -103,6 +138,9 @@ public class AnimationController
         {
             CubeView view = _gridState.GetCell(coord);
             if (view == null) continue;
+
+            // Particles at merge start
+            EmitDestructionParticles(view);
 
             Coordinate capturedCoord = coord;
 
@@ -129,7 +167,10 @@ public class AnimationController
         {
             CubeView view = _gridState.GetCell(coord);
             if (view != null)
+            {
+                EmitDestructionParticles(view);
                 seq.Join(CreatePopTween(view, coord));
+            }
         }
 
         await seq.ToTask();
@@ -157,59 +198,63 @@ public class AnimationController
 
     public async Task PlayRocketExplosion(RocketExplosionData data)
     {
-        // 1. Remove rocket at origin
+        // Rocket burst at origin
+        _particles.PlayRocketBurst(
+            _boardView.GridToWorld(data.Origin),
+            _boardView.ParticleSmoke,
+            _boardView.ParticleStar);
+
         _gridState.RemoveCell(data.Origin);
 
-        // 2. Crack damaged vases instantly
         CrackDamagedVases(data.DamagedObstacles);
 
-        // 3. Build destroyed set
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
         foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
         foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
         foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
 
-        // 4. Determine sprites + directions
         Sprite partASprite, partBSprite;
         int dirAx, dirAy, dirBx, dirBy;
         GetProjectileConfig(data, out partASprite, out partBSprite,
             out dirAx, out dirAy, out dirBx, out dirBy);
 
-        // 5. Animate single projectiles
         await AnimateSingleProjectiles(data, partASprite, partBSprite,
             allDestroyed, dirAx, dirAy, dirBx, dirBy);
 
-        // 6. Cleanup remaining
         foreach (var coord in allDestroyed)
             _gridState.RemoveCell(coord);
     }
 
     // ==========================================
-    // COMBO EXPLOSION (Fix 1: cleanup once, parallel fire)
+    // COMBO EXPLOSION
     // ==========================================
 
-    /// <summary>
-    /// Handle a combo explosion: 3×3 cleanup ONCE, crack vases ONCE,
-    /// then fire H and V projectile animations in parallel.
-    /// Called by BoardView.AnimateComboExplosion.
-    /// </summary>
     public async Task PlayComboExplosion(List<RocketExplosionData> explosions)
     {
         if (explosions == null || explosions.Count == 0) return;
 
-        // 1. Clear 3×3 area ONCE (shared between both explosions)
+        // Big rocket burst at combo origin
+        _particles.PlayRocketBurst(
+            _boardView.GridToWorld(explosions[0].Origin),
+            _boardView.ParticleSmoke,
+            _boardView.ParticleStar);
+
         var comboAreaCleared = explosions[0].ComboAreaCleared;
         if (comboAreaCleared != null)
         {
+            // Emit particles for each cleared cell before removing
             foreach (var coord in comboAreaCleared)
+            {
+                CubeView view = _gridState.GetCell(coord);
+                if (view != null)
+                    EmitDestructionParticles(view);
                 _gridState.RemoveCell(coord);
+            }
         }
 
-        // 2. Crack damaged vases ONCE (merge both explosions' lists)
         foreach (var data in explosions)
             CrackDamagedVases(data.DamagedObstacles);
 
-        // 3. Fire all projectile animations in parallel
         List<Task> tasks = new List<Task>();
 
         foreach (var data in explosions)
@@ -231,10 +276,6 @@ public class AnimationController
         await Task.WhenAll(tasks);
     }
 
-    /// <summary>
-    /// Animate combo projectiles for one direction (H or V) then cleanup.
-    /// Does NOT do 3×3 cleanup or vase cracks — PlayComboExplosion handles those.
-    /// </summary>
     private async Task AnimateComboProjectilesAndCleanup(
         RocketExplosionData data, Sprite spriteA, Sprite spriteB,
         HashSet<Coordinate> allDestroyed,
@@ -327,6 +368,10 @@ public class AnimationController
             if (proj != null) Object.Destroy(proj);
     }
 
+    /// <summary>
+    /// Animate projectile along path. Emits smoke trail, destruction particles,
+    /// and removes cells as it passes.
+    /// </summary>
     private async Task AnimateProjectilePath(
         GameObject projectile, List<Coordinate> path,
         HashSet<Coordinate> destroyedCoords, int dirX, int dirY)
@@ -345,8 +390,18 @@ public class AnimationController
                 .SetEase(Ease.Linear)
                 .ToTask();
 
+            // Smoke trail behind projectile
+            _particles.PlaySmokeTrail(targetPos, _boardView.ParticleSmoke);
+
             if (destroyedCoords.Contains(cell))
+            {
+                // Emit particles BEFORE removing the visual
+                CubeView view = _gridState.GetCell(cell);
+                if (view != null)
+                    EmitDestructionParticles(view);
+
                 _gridState.RemoveCell(cell);
+            }
         }
 
         if (projectile != null)
