@@ -1,36 +1,29 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Determines what should happen when a player taps a cell.
+/// Determines what action a player tap triggers.
 /// Pure C# — no Unity dependency.
 ///
-/// Priority order:
-///   1. Rocket with adjacent rocket  → RocketCombo
-///   2. Rocket without adjacent rocket → ExplodeRocket
-///   3. Cube with valid match group (≥ 2) → BlastGroup
-///   4. Everything else → None
-///
-/// The Orchestrator calls Resolve() once per tap, then dispatches
-/// to the appropriate system based on the result.
+/// Priority order (first match wins):
+///   1. Rocket with adjacent rocket → RocketCombo
+///   2. Rocket alone               → ExplodeRocket
+///   3. Cube with match group ≥ 2  → BlastGroup
+///   4. Everything else            → None
 /// </summary>
 public class TapResolver
 {
     /// <summary>
-    /// Resolve what a tap at the given coordinate means.
-    /// Returns a TapResult containing the action and any pre-computed data.
+    /// Resolve a tap at the given coordinate into a TapResult.
+    /// The result contains the action type and any pre-computed data
+    /// (matched coordinates, adjacent rockets) needed by GameSession.
     /// </summary>
     public TapResult Resolve(Board board, Coordinate coord, MatchStrategy matchStrategy)
     {
         GridItem item = board.GetItem(coord);
 
-        // --- Empty or obstacle: no action ---
-        if (item.IsEmpty)
+        if (item.IsEmpty || item.IsObstacle)
             return TapResult.NoAction();
 
-        if (item.IsObstacle)
-            return TapResult.NoAction();
-
-        // --- Rocket: check for combo first ---
         if (item.IsRocket)
         {
             List<Coordinate> adjacentRockets = FindAdjacentRockets(board, coord);
@@ -52,7 +45,6 @@ public class TapResolver
             };
         }
 
-        // --- Cube: check for valid match group ---
         if (item.IsCube)
         {
             List<Coordinate> matches = matchStrategy.FindMatches(board, coord);
@@ -71,9 +63,6 @@ public class TapResolver
         return TapResult.NoAction();
     }
 
-    /// <summary>
-    /// Find all rockets in the 4-directional neighbors of a coordinate.
-    /// </summary>
     private List<Coordinate> FindAdjacentRockets(Board board, Coordinate coord)
     {
         List<Coordinate> rockets = new List<Coordinate>();
@@ -91,8 +80,7 @@ public class TapResolver
             if (!board.IsValidCoordinate(neighbor.x, neighbor.y))
                 continue;
 
-            GridItem neighborItem = board.GetItem(neighbor);
-            if (neighborItem.IsRocket)
+            if (board.GetItem(neighbor).IsRocket)
                 rockets.Add(neighbor);
         }
 
@@ -102,19 +90,23 @@ public class TapResolver
 
 /// <summary>
 /// Result of a tap resolution. Contains the action type and
-/// any pre-computed data the Orchestrator needs to proceed.
+/// any pre-computed data GameSession needs to execute the action.
 /// </summary>
 public class TapResult
 {
+    /// <summary>What action this tap triggers.</summary>
     public TapAction Action;
+
+    /// <summary>The coordinate that was tapped.</summary>
     public Coordinate TappedCoord;
 
-    // For BlastGroup: the matched coordinates
+    /// <summary>For BlastGroup: all coordinates in the matched group.</summary>
     public List<Coordinate> MatchedCoordinates;
 
-    // For RocketCombo: adjacent rockets involved
+    /// <summary>For RocketCombo: adjacent rocket coordinates involved in the combo.</summary>
     public List<Coordinate> AdjacentRockets;
 
+    /// <summary>Create a result representing no valid action.</summary>
     public static TapResult NoAction() => new TapResult
     {
         Action = TapAction.None,

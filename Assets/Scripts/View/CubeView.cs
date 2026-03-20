@@ -4,11 +4,12 @@ using DG.Tweening;
 /// <summary>
 /// Visual representation of a single grid cell.
 ///
-/// Two derived visual systems:
-///   Hints:  ApplyHint/RemoveHint — sprite swap based on group membership
-///   Damage: ApplyDamageVisual — instant sprite swap when obstacle takes damage
+/// Owns two derived visual systems:
+///   Hints:  ApplyHint/RemoveHint — idempotent sprite swap based on group membership
+///   Damage: ApplyDamageVisual — instant sprite swap when an obstacle takes damage
 ///
-/// Both are idempotent. No animation timing conflicts.
+/// Sorting order is derived from Y coordinate — lower rows render behind higher rows,
+/// creating the 3D stacked cube illusion with overlapping bevel edges.
 /// </summary>
 public class CubeView : MonoBehaviour
 {
@@ -25,6 +26,7 @@ public class CubeView : MonoBehaviour
     // LIFECYCLE
     // ==========================================
 
+    /// <summary>Configure this CubeView for a specific cell. Sets sprite, coordinate, and sorting order.</summary>
     public void Configure(Coordinate coord, Sprite sprite, string itemId)
     {
         ItemId = itemId;
@@ -36,19 +38,20 @@ public class CubeView : MonoBehaviour
         if (_spriteRenderer != null)
         {
             _spriteRenderer.sprite = sprite;
-            _spriteRenderer.sortingOrder = coord.y;  // add this
+            _spriteRenderer.sortingOrder = coord.y;
         }
-
 
         name = $"Cell_{coord.x}_{coord.y}";
     }
 
+    /// <summary>Configure with explicit health tracking (for obstacles like Vase).</summary>
     public void ConfigureWithHealth(Coordinate coord, Sprite sprite, string itemId, int health)
     {
         Configure(coord, sprite, itemId);
         _displayedHealth = health;
     }
 
+    /// <summary>Reset all state. Called by CubePool.Return() before deactivating.</summary>
     public void Reset()
     {
         DOTween.Kill(transform);
@@ -63,7 +66,7 @@ public class CubeView : MonoBehaviour
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = null;
 
-        transform.localScale = new Vector3(1.3f, 1.3f, 1f);
+        transform.localScale = BoardView.CellScale;
         transform.localPosition = Vector3.zero;
     }
 
@@ -71,6 +74,7 @@ public class CubeView : MonoBehaviour
     // COORDINATE
     // ==========================================
 
+    /// <summary>Update coordinate after gravity. Also updates sorting order.</summary>
     public void UpdateCoordinate(Coordinate newCoord)
     {
         GridCoordinate = newCoord;
@@ -97,6 +101,7 @@ public class CubeView : MonoBehaviour
     // HINTS (Stateless, Idempotent)
     // ==========================================
 
+    /// <summary>Apply rocket hint visual. No-op if already hinted.</summary>
     public void ApplyHint(Sprite hintSprite)
     {
         if (_isHinted) return;
@@ -110,6 +115,7 @@ public class CubeView : MonoBehaviour
             .SetId("hint");
     }
 
+    /// <summary>Remove rocket hint visual. No-op if not hinted.</summary>
     public void RemoveHint()
     {
         if (!_isHinted) return;
@@ -124,15 +130,12 @@ public class CubeView : MonoBehaviour
     }
 
     // ==========================================
-    // DAMAGE VISUAL (Instant, No Animation)
+    // DAMAGE VISUAL (Instant)
     // ==========================================
 
     /// <summary>
-    /// Apply damage visual instantly. Swaps sprite on this frame.
-    /// No squash, no sequence, no timing conflicts with gravity.
-    ///
-    /// Called directly by AnimationController using pre-gravity coordinates
-    /// from the step's DamagedObstacles list — guaranteed to find the right CubeView.
+    /// Apply damage visual instantly (e.g., vase cracking).
+    /// Called by AnimationController using pre-gravity coordinates.
     /// </summary>
     public void ApplyDamageVisual(Sprite damagedSprite)
     {
@@ -143,7 +146,7 @@ public class CubeView : MonoBehaviour
     }
 
     // ==========================================
-    // HELPERS
+    // SORTING
     // ==========================================
 
     public void SetSortingOrder(int order)

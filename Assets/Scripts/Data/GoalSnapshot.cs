@@ -1,27 +1,21 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Lightweight snapshot of goal state for the UI layer.
-/// Built by the Orchestrator from ObstacleGoalTracker.
-/// The View never accesses ObstacleGoalTracker directly.
+/// Read-only snapshot of obstacle goal progress for the UI layer.
 ///
-/// Contains both initial counts (for setup) and remaining counts (for updates).
+/// Built by GameOrchestrator from ObstacleGoalTracker after each turn.
+/// The View layer never accesses ObstacleGoalTracker directly —
+/// this DTO is the only bridge between goal state and UI rendering.
 /// </summary>
 public class GoalSnapshot
 {
-    /// <summary>
-    /// Obstacle types that are goals, in display order.
-    /// </summary>
+    /// <summary>Obstacle types that are goals for this level, in display order.</summary>
     public List<string> GoalTypes;
 
-    /// <summary>
-    /// Initial count per obstacle type (for level start setup).
-    /// </summary>
+    /// <summary>How many of each obstacle type existed at level start.</summary>
     public Dictionary<string, int> InitialCounts;
 
-    /// <summary>
-    /// Current remaining count per obstacle type.
-    /// </summary>
+    /// <summary>How many of each obstacle type remain on the board.</summary>
     public Dictionary<string, int> RemainingCounts;
 
     public GoalSnapshot()

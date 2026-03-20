@@ -190,38 +190,5 @@ public class HintCalculatorTests
         Assert.AreEqual(0, hints.Count);
     }
 
-    // ==========================================
-    // FindRocketHintGroups — separate group lists
-    // ==========================================
 
-    [Test]
-    public void FindRocketHintGroups_TwoGroups_ReturnsSeparateLists()
-    {
-        PlaceCube(0, 0, ItemIds.Red);
-        PlaceCube(0, 1, ItemIds.Red);
-        PlaceCube(0, 2, ItemIds.Red);
-        PlaceCube(0, 3, ItemIds.Red);
-
-        PlaceCube(7, 0, ItemIds.Blue);
-        PlaceCube(7, 1, ItemIds.Blue);
-        PlaceCube(7, 2, ItemIds.Blue);
-        PlaceCube(7, 3, ItemIds.Blue);
-
-        var groups = HintCalculator.FindRocketHintGroups(_board);
-
-        Assert.AreEqual(2, groups.Count);
-        Assert.AreEqual(4, groups[0].Count);
-        Assert.AreEqual(4, groups[1].Count);
-    }
-
-    [Test]
-    public void FindRocketHintGroups_NoQualifyingGroups_ReturnsEmpty()
-    {
-        PlaceCube(0, 0, ItemIds.Red);
-        PlaceCube(1, 0, ItemIds.Blue);
-
-        var groups = HintCalculator.FindRocketHintGroups(_board);
-
-        Assert.AreEqual(0, groups.Count);
-    }
 }

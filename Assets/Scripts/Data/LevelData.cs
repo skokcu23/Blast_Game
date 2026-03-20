@@ -1,12 +1,15 @@
 using System;
 
 /// <summary>
-/// Data Transfer Object for level files.
-/// Matches the JSON structure defined in the Case Study:
-///   level_number, grid_width, grid_height, move_count, grid[]
+/// Data Transfer Object for level JSON files.
 ///
-/// The grid array starts from bottom-left and fills horizontally,
-/// ending at the top-right. Index formula: grid[y * grid_width + x]
+/// Matches the JSON structure defined in the Case Study:
+///   { level_number, grid_width, grid_height, move_count, grid[] }
+///
+/// The grid array is stored bottom-left → top-right, row by row.
+/// Index formula: grid[y * grid_width + x]
+///
+/// Deserialized by LevelParser via JsonUtility.
 /// </summary>
 [Serializable]
 public class LevelData
@@ -19,7 +22,7 @@ public class LevelData
 
     /// <summary>
     /// Get the item ID at a specific grid coordinate.
-    /// Grid is stored bottom-left → top-right, row by row.
+    /// Returns ItemIds.None if the coordinate is out of bounds.
     /// </summary>
     public string GetItemIdAt(int x, int y)
     {
@@ -30,7 +33,8 @@ public class LevelData
     }
 
     /// <summary>
-    /// Basic validation to catch malformed level files early.
+    /// Validate against Case Study constraints:
+    /// grid dimensions 6–10, positive move count, correct grid array length.
     /// </summary>
     public bool IsValid()
     {

@@ -1,11 +1,16 @@
 /// <summary>
 /// Single source of truth for all item type identifiers.
-/// These match the exact keys from the level file format defined in the Case Study:
-/// r, g, b, y, rand, vro, hro, bo, s, v
+///
+/// These match the exact string keys from the level JSON format:
+///   Cubes:     r, g, b, y, rand
+///   Rockets:   vro, hro
+///   Obstacles: bo, s, v
+///
+/// Used by: ItemFactory, LevelData, DamageResolver, sprite lookups.
 /// </summary>
 public static class ItemIds
 {
-    // --- Cubes (colors) ---
+    // --- Cubes ---
     public const string Red = "r";
     public const string Green = "g";
     public const string Blue = "b";
@@ -21,14 +26,15 @@ public static class ItemIds
     public const string Stone = "s";
     public const string Vase = "v";
 
-    // --- Empty ---
+    // --- Empty cell ---
     public const string None = "none";
 
-    // --- Helper arrays for quick lookups ---
+    // --- Lookup arrays ---
     public static readonly string[] CubeIds = { Red, Green, Blue, Yellow };
     public static readonly string[] RocketIds = { VerticalRocket, HorizontalRocket };
     public static readonly string[] ObstacleIds = { Box, Stone, Vase };
 
+    // --- Type checks ---
     public static bool IsCube(string id) =>
         id == Red || id == Green || id == Blue || id == Yellow;
 

@@ -1,49 +1,66 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// DTO: Describes one rocket explosion for the View to animate.
+/// Describes one rocket explosion for the View to animate.
 ///
-/// Two modes:
-///   Single rocket: PathA/PathB (1 projectile each direction)
-///   Combo rocket:  ParallelPathsA/ParallelPathsB (3 projectiles each direction)
+/// Two modes (check IsCombo):
+///   Single:  PathA/PathB contain one path each (2 projectiles, opposite directions).
+///   Combo:   ParallelPathsA/ParallelPathsB contain 3 paths each (6 projectiles total).
 ///
-/// Check IsCombo to determine which paths to read.
-///
-/// Damage data (DestroyedCubes, DamagedObstacles, etc.) is the aggregate
-/// of all paths for this direction's explosion.
+/// Damage lists are aggregated across all paths for this explosion.
 /// </summary>
 public class RocketExplosionData
 {
+    /// <summary>Grid cell where the rocket was before exploding.</summary>
     public Coordinate Origin;
+
+    /// <summary>True if this is a horizontal rocket (projectiles go left/right).</summary>
     public bool IsHorizontal;
+
+    /// <summary>The rocket's ItemId (e.g., ItemIds.HorizontalRocket).</summary>
     public string RocketId;
 
     // --- Single rocket paths ---
+
+    /// <summary>Path in the negative direction (left or down). One coordinate per cell traversed.</summary>
     public List<Coordinate> PathA;
+
+    /// <summary>Path in the positive direction (right or up).</summary>
     public List<Coordinate> PathB;
 
-    // --- Combo rocket paths (3 per direction) ---
+    // --- Combo rocket paths (3 parallel per direction) ---
+
+    /// <summary>3 parallel paths in the negative direction. Null for single rockets.</summary>
     public List<List<Coordinate>> ParallelPathsA;
+
+    /// <summary>3 parallel paths in the positive direction. Null for single rockets.</summary>
     public List<List<Coordinate>> ParallelPathsB;
 
-    // --- Damage data ---
+    // --- Damage data (aggregate of all paths) ---
+
+    /// <summary>Cubes destroyed by this explosion.</summary>
     public List<Coordinate> DestroyedCubes;
+
+    /// <summary>Obstacles that took damage but survived.</summary>
     public List<Coordinate> DamagedObstacles;
+
+    /// <summary>Obstacles destroyed by this explosion.</summary>
     public List<Coordinate> DestroyedObstacles;
+
+    /// <summary>Type info for destroyed obstacles (for ObstacleGoalTracker).</summary>
     public List<DestroyedObstacleInfo> DestroyedObstacleInfos;
+
+    /// <summary>Other rockets hit by this explosion (queued for chain reaction).</summary>
     public List<Coordinate> TriggeredRockets;
 
     /// <summary>
-    /// Combo only: coordinates in the 3×3 area that are now empty on the board.
-    /// The View clears these visuals BEFORE projectile animation starts.
-    /// Includes: removed rockets, destroyed cubes, destroyed obstacles.
-    /// Does NOT include: surviving damaged obstacles (e.g., vases damaged by
-    /// one direction but killed by the other — the killing direction owns that).
-    ///
+    /// Combo only: 3×3 area cells that are now empty on the board.
+    /// The View clears these visuals before projectile animation starts.
     /// Null for single rockets.
     /// </summary>
     public List<Coordinate> ComboAreaCleared;
 
+    /// <summary>True if this is a combo explosion (has parallel paths).</summary>
     public bool IsCombo => ParallelPathsA != null && ParallelPathsA.Count > 0;
 
     public RocketExplosionData()

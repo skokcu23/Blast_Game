@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
 
+/// <summary>
 /// Thin facade coordinating the three view subsystems:
 ///   CubePool         — object pooling for CubeViews
 ///   GridStateManager — single owner of visual state (_cells dictionary)
@@ -12,6 +13,7 @@ using UnityEngine;
 ///
 /// Also holds all sprite references (SerializedFields) and provides
 /// lookup methods used by the subsystems.
+/// </summary>
 public class BoardView : MonoBehaviour
 {
     [Header("Prefab")]
@@ -131,17 +133,19 @@ public class BoardView : MonoBehaviour
     [SerializeField]
     private SpriteRenderer _boardFrame;
 
-    // Public accessors for AnimationController
+    // --- Public accessors for AnimationController ---
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
     public Sprite HorizontalPartRightSprite => _horizontalPartRightSprite;
     public Sprite VerticalPartTopSprite => _verticalPartTopSprite;
     public Sprite VerticalPartBottomSprite => _verticalPartBottomSprite;
 
+    /// <summary>Scale applied to all cubes. > 1.0 for overlapping 3D bevel effect.</summary>
     public static readonly Vector3 CellScale = new Vector3(1.3f, 1.3f, 1f);
 
+    /// <summary>Board height in cells. Used by CubeView for sorting order.</summary>
     public int BoardHeight { get; private set; }
 
-    // Subsystems
+    // --- Subsystems ---
     private CubePool _pool;
     private GridStateManager _gridState;
     private AnimationController _animator;
@@ -168,7 +172,7 @@ public class BoardView : MonoBehaviour
 
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
-        BoardHeight = board.Height; // add this line
+        BoardHeight = board.Height;
 
         _gridState.Clear();
         _particles.ReturnAll();
@@ -197,6 +201,7 @@ public class BoardView : MonoBehaviour
         _animator.PlayRocketSpawn(data);
     }
 
+    /// <summary>Duration the Orchestrator should wait after spawning a rocket visual.</summary>
     public float RocketSpawnPause => _animator.RocketSpawnPause;
 
     public async Task AnimateRocketExplosion(RocketExplosionData data)
@@ -237,6 +242,7 @@ public class BoardView : MonoBehaviour
     // COORDINATE CONVERSION
     // ==========================================
 
+    /// <summary>Convert a grid coordinate to a world position.</summary>
     public Vector3 GridToWorld(Coordinate coord)
     {
         return new Vector3(coord.x - _offsetX, coord.y - _offsetY, 0);
@@ -246,6 +252,7 @@ public class BoardView : MonoBehaviour
     // SPRITE LOOKUPS
     // ==========================================
 
+    /// <summary>Get the default sprite for an item type.</summary>
     public Sprite GetSpriteForItem(string itemId) =>
         itemId switch
         {
@@ -261,9 +268,11 @@ public class BoardView : MonoBehaviour
             _ => null,
         };
 
+    /// <summary>Get the vase sprite for a specific health value.</summary>
     public Sprite GetVaseSprite(int health) =>
         (health <= 1 && _vaseDamagedSprite != null) ? _vaseDamagedSprite : _vaseSprite;
 
+    /// <summary>Get the rocket-state hint sprite for a cube color.</summary>
     public Sprite GetHintSpriteForColor(string itemId) =>
         itemId switch
         {
@@ -278,10 +287,7 @@ public class BoardView : MonoBehaviour
     // PARTICLE SPRITE LOOKUPS
     // ==========================================
 
-    /// <summary>
-    /// Get the particle sprite for a cube color.
-    /// Returns null for non-cube items.
-    /// </summary>
+    /// <summary>Get the particle sprite for a cube color. Null for non-cubes.</summary>
     public Sprite GetCubeParticleSprite(string itemId) =>
         itemId switch
         {
@@ -292,11 +298,7 @@ public class BoardView : MonoBehaviour
             _ => null,
         };
 
-    /// <summary>
-    /// Get the particle sprites for an obstacle type.
-    /// Returns array of fragment sprites (randomly picked per particle).
-    /// Returns null for non-obstacle items.
-    /// </summary>
+    /// <summary>Get particle sprites for an obstacle type (3 fragment variants). Null for non-obstacles.</summary>
     public Sprite[] GetObstacleParticleSprites(string itemId) =>
         itemId switch
         {
@@ -313,7 +315,7 @@ public class BoardView : MonoBehaviour
     public Sprite ParticleStar => _particleStar;
 
     // ==========================================
-    // CAMERA & BACKGROUND
+    // CAMERA & BOARD FRAME
     // ==========================================
 
     private void FitBoardFrame(int boardWidth, int boardHeight)
@@ -321,19 +323,15 @@ public class BoardView : MonoBehaviour
         if (_boardFrame == null)
             return;
 
-        // Use 9-slice mode — stretches center and edges, keeps corners intact
         _boardFrame.drawMode = SpriteDrawMode.Sliced;
 
-        // Size in world units — tightly wraps the board with a small border
         float padding_y = 0.33f;
         float padding_x = 0.2f;
         _boardFrame.size = new Vector2(boardWidth + padding_x, boardHeight + padding_y);
 
-        // Keep scale at 1 — size is controlled by the sliced size, not scale
         _boardFrame.transform.localScale = Vector3.one;
         _boardFrame.transform.position = new Vector3(0, 0, 0.1f);
 
-        // Ensure correct sorting
         _boardFrame.sortingOrder = -1;
     }
 

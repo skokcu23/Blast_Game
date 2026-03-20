@@ -15,10 +15,6 @@ public class LevelEditorMenu
     {
         var persistence = new PlayerPrefsLevelPersistence();
         int current = persistence.LoadCurrentLevel();
-
-        int newLevel = EditorPrefs.GetInt("LevelEditorMenu_LastInput", current) % 10;
-
-        // Show a simple input dialog
         LevelEditorWindow.Show(current);
     }
 }

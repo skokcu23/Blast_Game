@@ -1,16 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// Reads level JSON files and produces LevelData objects.
+/// Loads and parses level JSON files into LevelData objects.
 ///
-/// Level files live in: Resources/Levels/level_01.json, level_02.json, etc.
-/// (Unity strips the .json extension when loading via Resources.Load)
+/// Level files are stored at: Assets/Resources/Levels/level_01.json through level_10.json
+/// Unity's Resources.Load strips the .json extension automatically.
 /// </summary>
 public static class LevelParser
 {
     /// <summary>
-    /// Load a level from Unity's Resources folder.
-    /// File must be at: Resources/Levels/level_{number:D2}
+    /// Load a level by number from the Resources folder.
+    /// Returns null if the file is missing or fails validation.
     /// </summary>
     public static LevelData LoadLevel(int levelNumber)
     {
@@ -19,10 +19,7 @@ public static class LevelParser
 
         if (file == null)
         {
-            Debug.LogError(
-                $"[LevelParser] Could not find level file at Resources/{path}. "
-                    + $"Make sure the file exists and is named correctly."
-            );
+            Debug.LogError($"[LevelParser] Level file not found at Resources/{path}");
             return null;
         }
 
@@ -31,7 +28,7 @@ public static class LevelParser
 
     /// <summary>
     /// Parse a raw JSON string into LevelData.
-    /// This overload is testable without Unity (pass any JSON string).
+    /// Validates the result before returning.
     /// </summary>
     public static LevelData Parse(string json)
     {
@@ -46,10 +43,9 @@ public static class LevelParser
         if (!data.IsValid())
         {
             Debug.LogError(
-                $"[LevelParser] Level {data.level_number} failed validation. "
-                    + $"Grid: {data.grid_width}x{data.grid_height}, "
-                    + $"Items: {data.grid?.Length ?? 0} (expected {data.grid_width * data.grid_height})"
-            );
+                $"[LevelParser] Level {data.level_number} failed validation. " +
+                $"Grid: {data.grid_width}x{data.grid_height}, " +
+                $"Items: {data.grid?.Length ?? 0} (expected {data.grid_width * data.grid_height})");
             return null;
         }
 
@@ -57,8 +53,8 @@ public static class LevelParser
     }
 
     /// <summary>
-    /// Check how many level files exist in Resources/Levels/.
-    /// Counts sequentially from level_01 until a file is not found.
+    /// Count total available levels by checking sequential files starting from level_01.
+    /// Stops at the first missing file number.
     /// </summary>
     public static int GetTotalLevelCount()
     {

@@ -1,14 +1,15 @@
 /// <summary>
-/// States of a level play session.
+/// Lifecycle states of a single level play session.
+/// Managed by GameSession, read by GameOrchestrator to trigger UI.
 /// </summary>
 public enum GameSessionState
 {
-    /// <summary>Level is being played, accepting input</summary>
+    /// <summary>Level is in progress, accepting player input.</summary>
     Playing,
 
-    /// <summary>All obstacles cleared within move limit</summary>
+    /// <summary>All obstacles cleared within the move limit. Level complete.</summary>
     Won,
 
-    /// <summary>Ran out of moves with obstacles remaining</summary>
+    /// <summary>No moves remaining with obstacles still on the board.</summary>
     Lost
 }

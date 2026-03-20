@@ -5,14 +5,14 @@ using UnityEngine;
 using DG.Tweening;
 
 /// <summary>
-/// Layer mediator: Logic (GameSession) → View (BoardView) + UI (GameplayUI).
+/// Mediator between Logic (GameSession) and View (BoardView) + UI (GameplayUI).
 ///
-/// Builds lightweight snapshots from logic state for the View and UI layers:
-///   - GoalSnapshot for GameplayUI (instead of passing ObstacleGoalTracker)
-///   - Board only accessed for Initialize and ReconcileWithBoard
-///
-/// No health snapshots. No GoalTracker passed to View.
-/// No dead code. No magic numbers.
+/// Responsibilities:
+///   1. Create GameSession from level data
+///   2. Forward taps → session.ProcessTap()
+///   3. Iterate TurnResult.Steps → await BoardView animations for each
+///   4. Build GoalSnapshot for UI (never passes ObstacleGoalTracker directly)
+///   5. Handle win/lose state transitions
 /// </summary>
 public class GameOrchestrator : MonoBehaviour
 {
@@ -150,12 +150,12 @@ public class GameOrchestrator : MonoBehaviour
     }
 
     // ==========================================
-    // SNAPSHOT BUILDERS — Mediator extracts data for View/UI
+    // SNAPSHOT BUILDER
     // ==========================================
 
     /// <summary>
     /// Build a lightweight goal snapshot from ObstacleGoalTracker.
-    /// GameplayUI receives this instead of the tracker itself.
+    /// GameplayUI receives this DTO instead of the tracker itself.
     /// </summary>
     private GoalSnapshot BuildGoalSnapshot()
     {
@@ -193,7 +193,6 @@ public class GameOrchestrator : MonoBehaviour
 
                 case TurnStepType.RocketCreated:
                     _boardView.SpawnRocketVisual(step.RocketCreationData);
-                    // Fix 2: DOTween delay respects Time.timeScale (Task.Delay doesn't)
                     await DOVirtual.DelayedCall(
                         _boardView.RocketSpawnPause, () => { }, false
                     ).ToTask();
@@ -204,7 +203,6 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.ComboExplosion:
-                    // Fix 1: single method handles cleanup once + parallel projectiles
                     await _boardView.AnimateComboExplosion(step.ComboExplosionData);
                     break;
 

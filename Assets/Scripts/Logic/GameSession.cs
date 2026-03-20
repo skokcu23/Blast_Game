@@ -3,9 +3,11 @@ using System.Collections.Generic;
 /// <summary>
 /// Pure C# state machine for playing one level.
 ///
-/// UpdateDamagedSprites steps are GONE from TurnResult output.
-/// Vase visual updates are derived state — the View layer detects
-/// health changes and animates accordingly after each damage step.
+/// Orchestrates all game systems: match finding, blasting, rocket creation/explosion,
+/// gravity, refill, chain reactions, goal tracking, and win/lose detection.
+///
+/// ProcessTap() is the single entry point. It returns a TurnResult containing
+/// ordered steps for the View to animate. The View never calls game systems directly.
 /// </summary>
 public class GameSession
 {
@@ -30,6 +32,7 @@ public class GameSession
     // CONSTRUCTION
     // ==========================================
 
+    /// <summary>Create a session from a parsed level file.</summary>
     public GameSession(LevelData levelData)
     {
         _board = new Board(levelData.grid_width, levelData.grid_height);
@@ -38,6 +41,7 @@ public class GameSession
         InitializeSystems();
     }
 
+    /// <summary>Create a session from a pre-built board (for testing).</summary>
     public GameSession(Board board, int moveCount)
     {
         _board = board;
@@ -45,6 +49,7 @@ public class GameSession
         InitializeSystems();
     }
 
+    /// <summary>Create a session with a custom RocketProcessor (for seeded testing).</summary>
     public GameSession(Board board, int moveCount, RocketProcessor rocketProcessor)
     {
         _board = board;
@@ -73,6 +78,10 @@ public class GameSession
     // MAIN ENTRY POINT
     // ==========================================
 
+    /// <summary>
+    /// Process a player tap at the given coordinate.
+    /// Returns a TurnResult with ordered animation steps, or Invalid if no action.
+    /// </summary>
     public TurnResult ProcessTap(Coordinate coord)
     {
         if (_state != GameSessionState.Playing || _moveCount <= 0)
@@ -93,6 +102,9 @@ public class GameSession
         }
     }
 
+    /// <summary>
+    /// Get current rocket hint data (groups of 4+ same-color cubes).
+    /// </summary>
     public Dictionary<Coordinate, string> GetHints()
     {
         return HintCalculator.FindRocketHints(_board);
@@ -137,9 +149,6 @@ public class GameSession
                 BlastData = blastResult
             });
         }
-
-        // REMOVED: UpdateDamagedSprites step
-        // Vase cracks are derived state — View detects health changes
 
         AppendSettleSteps(result);
 
@@ -202,9 +211,6 @@ public class GameSession
             ComboExplosionData = comboExplosions
         });
 
-        // REMOVED: UpdateDamagedSprites step for combo
-        // Vase cracks are derived state
-
         ProcessChainReactions(pendingChains, result);
 
         AppendSettleSteps(result);
@@ -220,6 +226,10 @@ public class GameSession
     // CHAIN REACTION QUEUE
     // ==========================================
 
+    /// <summary>
+    /// Process a queue of triggered rockets. Each explosion may trigger more rockets.
+    /// Capped at MaxChainDepth to prevent infinite loops from board edge cases.
+    /// </summary>
     private void ProcessChainReactions(Queue<Coordinate> pending, TurnResult result)
     {
         int chainCount = 0;
@@ -241,9 +251,6 @@ public class GameSession
                 ExplosionData = explosionData
             });
 
-            // REMOVED: UpdateDamagedSprites step for chain reactions
-            // Vase cracks are derived state
-
             foreach (var triggered in explosionData.TriggeredRockets)
                 pending.Enqueue(triggered);
         }
@@ -253,6 +260,9 @@ public class GameSession
     // BOARD SETTLING
     // ==========================================
 
+    /// <summary>
+    /// Apply gravity + refill after any destructive action. Checks win/lose afterwards.
+    /// </summary>
     private void AppendSettleSteps(TurnResult result)
     {
         var gravityMovements = _gravityProcessor.ApplyGravity(_board);

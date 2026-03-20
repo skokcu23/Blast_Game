@@ -2,27 +2,20 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Handles all rocket operations. Pure C# — no Unity dependency.
+/// Handles all rocket operations: creation, single explosion, and combo explosion.
+/// Pure C# — no Unity dependency.
 ///
-/// ╔══════════════════════════════════════════════════════════════╗
-/// ║ CRITICAL INVARIANT:                                        ║
-/// ║ When TracePath encounters another rocket, it adds the      ║
-/// ║ coordinate to TriggeredRockets but NEVER removes it from   ║
-/// ║ the board. Only ExplodeRocket() removes a rocket.          ║
-/// ╚══════════════════════════════════════════════════════════════╝
+/// Chain Reaction Invariant:
+///   When TracePath encounters another rocket, it adds the coordinate to
+///   TriggeredRockets but NEVER removes it from the board. Only ExplodeRocket()
+///   removes a rocket. This allows GameSession to process chains via a queue.
 ///
-/// COMBO DESIGN:
-/// A combo fires two independent rockets (H and V) from the same origin.
-/// Each direction traces 3 parallel paths with its OWN processed set.
-/// The 3×3 center area is the natural intersection — cells there get
-/// hit by both directions:
-///   - Cube (1HP):  H destroys → V sees empty → 1 hit total
-///   - Box (1HP):   H destroys → V sees empty → 1 hit total
-///   - Stone (1HP): H destroys → V sees empty → 1 hit total
-///   - Vase (2HP):  H damages (2→1) → V destroys (1→0) → 2 hits total
-///
-/// No special-case 3×3 processing. No double-damage hacks.
-/// The geometry does the work.
+/// Combo Design:
+///   A combo fires two independent rockets (H and V) from the same origin.
+///   Each direction traces 3 parallel paths with its OWN processed set.
+///   The 3×3 center is the natural intersection — cells there get hit by both:
+///     Cube/Box/Stone (1HP): destroyed by first direction, second sees empty
+///     Vase (2HP): damaged by first direction (2→1), destroyed by second (1→0)
 /// </summary>
 public class RocketProcessor
 {
@@ -35,6 +28,10 @@ public class RocketProcessor
     // CREATION
     // ==========================================
 
+    /// <summary>
+    /// Create a rocket at the tapped cell from a group of 4+ matched cubes.
+    /// Randomly chooses horizontal or vertical. Returns null if group is too small.
+    /// </summary>
     public RocketCreationData CreateRocket(Board board, Coordinate tappedCell, List<Coordinate> matchedCells)
     {
         if (matchedCells.Count < 4)
@@ -54,12 +51,18 @@ public class RocketProcessor
         };
     }
 
+    /// <summary>Check if a match count qualifies for rocket creation.</summary>
     public bool QualifiesForRocket(int matchCount) => matchCount >= 4;
 
     // ==========================================
-    // SINGLE ROCKET EXPLOSION (unchanged)
+    // SINGLE ROCKET EXPLOSION
     // ==========================================
 
+    /// <summary>
+    /// Explode a single rocket at the given coordinate.
+    /// Traces two paths (opposite directions) destroying cubes and damaging obstacles.
+    /// Returns null if the cell doesn't contain a rocket.
+    /// </summary>
     public RocketExplosionData ExplodeRocket(Board board, Coordinate rocketCoord)
     {
         GridItem rocketItem = board.GetItem(rocketCoord);
@@ -99,35 +102,30 @@ public class RocketProcessor
     // ==========================================
 
     /// <summary>
-    /// Two independent rockets fire from the same origin.
-    /// Returns [0]=horizontal, [1]=vertical.
+    /// Fire two independent rockets (H and V) from the same origin.
+    /// Returns [0]=horizontal explosion, [1]=vertical explosion.
     ///
-    /// Each direction traces 3 parallel full-width/full-height paths
-    /// with its own processed set. The 3×3 center is the natural
-    /// intersection where cells get hit by both directions.
+    /// Each direction uses its own processed set, so the 3×3 intersection
+    /// area gets hit by both directions — vases take 2 damage total.
     /// </summary>
     public List<RocketExplosionData> ProcessCombo(
         Board board, Coordinate tappedRocket, List<Coordinate> adjacentRockets)
     {
         List<RocketExplosionData> explosions = new List<RocketExplosionData>();
 
-        // 1. Remove ALL combo participant rockets from the board
+        // 1. Remove all combo participant rockets from the board
         board.SetItem(tappedRocket, ItemFactory.CreateEmpty());
         foreach (var adj in adjacentRockets)
             board.SetItem(adj, ItemFactory.CreateEmpty());
 
-        // Removed rocket coords — both directions skip these (they're already empty,
-        // but we add them to processed sets so path tracing doesn't try to "damage" empty cells
-        // and so the origin is cleanly handled)
         HashSet<Coordinate> removedRockets = new HashSet<Coordinate>();
         removedRockets.Add(tappedRocket);
         foreach (var adj in adjacentRockets)
             removedRockets.Add(adj);
 
-        // Shared triggered set — prevents same chain-rocket from being queued twice
         HashSet<Coordinate> triggeredSet = new HashSet<Coordinate>();
 
-        // 2. HORIZONTAL explosion — traces 3 full rows independently
+        // 2. Horizontal explosion — 3 parallel rows
         HashSet<Coordinate> processedH = new HashSet<Coordinate>(removedRockets);
 
         RocketExplosionData horizData = new RocketExplosionData
@@ -154,10 +152,7 @@ public class RocketProcessor
 
         explosions.Add(horizData);
 
-        // 3. VERTICAL explosion — traces 3 full columns independently
-        //    Uses its OWN processed set. Cells in the 3×3 that H already
-        //    damaged are NOT in processedV, so V damages them again.
-        //    This is correct: two rockets cross at the center.
+        // 3. Vertical explosion — 3 parallel columns (own processed set)
         HashSet<Coordinate> processedV = new HashSet<Coordinate>(removedRockets);
 
         RocketExplosionData vertData = new RocketExplosionData
@@ -184,9 +179,7 @@ public class RocketProcessor
 
         explosions.Add(vertData);
 
-        // 4. Compute ComboAreaCleared — every 3×3 cell that is now empty
-        //    on the board. Used by the View to clear visuals before
-        //    projectile animation starts.
+        // 4. Compute ComboAreaCleared — 3×3 cells now empty on the board
         List<Coordinate> areaCleared = new List<Coordinate>();
         for (int dx = -1; dx <= 1; dx++)
         {
@@ -211,6 +204,7 @@ public class RocketProcessor
 
     /// <summary>
     /// Trace a single-width path for a normal (non-combo) rocket.
+    /// Starts one cell past the origin in the given direction.
     /// </summary>
     private void TracePath(
         Board board, Coordinate origin, int dx, int dy,
@@ -229,11 +223,10 @@ public class RocketProcessor
 
             if (item.IsEmpty)
             {
-                // pass through
+                // Pass through
             }
             else if (item.IsRocket)
             {
-                // CRITICAL: DO NOT remove from board
                 if (triggeredSet.Add(cell))
                     data.TriggeredRockets.Add(cell);
             }
@@ -254,30 +247,21 @@ public class RocketProcessor
 
     /// <summary>
     /// Trace a path for one row/column of a combo.
-    ///
-    /// IMPORTANT: Starts at the origin cell itself (not origin + direction).
-    /// This ensures that every cell in the 3×3 area is visited by BOTH
-    /// the horizontal and vertical traces, so obstacles take 2 damage.
-    ///
-    /// Uses alreadyProcessed to prevent double-damage within the same
-    /// direction (left and right both start at origin — the second call
-    /// finds origin already processed and skips it).
+    /// Starts AT the origin cell (not origin + direction) so every cell
+    /// in the 3×3 area is visited by both H and V directions.
     /// </summary>
     private void TracePathCombo(
         Board board, Coordinate origin, int dx, int dy,
         List<Coordinate> path, RocketExplosionData data,
         HashSet<Coordinate> alreadyProcessed, HashSet<Coordinate> triggeredSet)
     {
-        // Start AT origin, not origin + direction.
-        // This is critical for 3×3 damage: the origin cells of each row/column
-        // are part of the 3×3 area and must be visited by both directions.
         int x = origin.x;
         int y = origin.y;
 
         while (board.IsValidCoordinate(x, y))
         {
             Coordinate cell = new Coordinate(x, y);
-            path.Add(cell); // Always add to path for visual traversal
+            path.Add(cell);
 
             if (!alreadyProcessed.Contains(cell))
             {
@@ -299,7 +283,6 @@ public class RocketProcessor
                 {
                     ApplyObstacleDamage(board, cell, item, DamageSource.Rocket, data);
                 }
-                // Empty cells: pass through
             }
 
             x += dx;
