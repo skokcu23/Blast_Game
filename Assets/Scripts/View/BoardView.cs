@@ -3,10 +3,16 @@ using System.Threading.Tasks;
 using UnityEngine;
 using DG.Tweening;
 
-/// <summary>
-/// Thin facade coordinating the four view subsystems:
-///   CubePool, GridStateManager, AnimationController, ParticleEffectController
-/// </summary>
+/// Thin facade coordinating the three view subsystems:
+///   CubePool         — object pooling for CubeViews
+///   GridStateManager — single owner of visual state (_cells dictionary)
+///   AnimationController — purely cosmetic DOTween animations
+///
+/// The Orchestrator only talks to BoardView. BoardView delegates everything.
+///
+/// Also holds all sprite references (SerializedFields) and provides
+/// lookup methods used by the subsystems.
+
 public class BoardView : MonoBehaviour
 {
     [Header("Prefab")]
@@ -65,6 +71,8 @@ public class BoardView : MonoBehaviour
     [SerializeField] private Sprite _particleSmoke;
     [SerializeField] private Sprite _particleStar;
 
+    [Header("Board Frame")]
+    [SerializeField] private SpriteRenderer _boardFrame;
 
     // Public accessors for AnimationController
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
@@ -72,7 +80,9 @@ public class BoardView : MonoBehaviour
     public Sprite VerticalPartTopSprite => _verticalPartTopSprite;
     public Sprite VerticalPartBottomSprite => _verticalPartBottomSprite;
 
-    public static readonly Vector3 CellScale = new Vector3(0.95f, 0.95f, 1f);
+    public static readonly Vector3 CellScale = new Vector3(1.3f, 1.3f, 1f);
+
+    public int BoardHeight { get; private set; }
 
     // Subsystems
     private CubePool _pool;
@@ -101,6 +111,7 @@ public class BoardView : MonoBehaviour
 
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
+        BoardHeight = board.Height;  // add this line
 
         _gridState.Clear();
         _particles.ReturnAll();
@@ -109,6 +120,9 @@ public class BoardView : MonoBehaviour
 
         FitCameraToBoard(board.Width, board.Height);
     }
+
+
+
 
     // ==========================================
     // ANIMATION API

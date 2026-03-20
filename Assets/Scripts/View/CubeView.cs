@@ -34,7 +34,11 @@ public class CubeView : MonoBehaviour
         _displayedHealth = -1;
 
         if (_spriteRenderer != null)
+        {
             _spriteRenderer.sprite = sprite;
+            _spriteRenderer.sortingOrder = coord.y;  // add this
+        }
+
 
         name = $"Cell_{coord.x}_{coord.y}";
     }
@@ -59,7 +63,7 @@ public class CubeView : MonoBehaviour
         if (_spriteRenderer != null)
             _spriteRenderer.sprite = null;
 
-        transform.localScale = new Vector3(0.95f, 0.95f, 1f);
+        transform.localScale = new Vector3(1.3f, 1.3f, 1f);
         transform.localPosition = Vector3.zero;
     }
 
@@ -71,6 +75,7 @@ public class CubeView : MonoBehaviour
     {
         GridCoordinate = newCoord;
         name = $"Cell_{newCoord.x}_{newCoord.y}";
+        SetSortingOrder(newCoord.y);
     }
 
     // ==========================================
@@ -135,5 +140,15 @@ public class CubeView : MonoBehaviour
         SetSprite(damagedSprite);
         SetDefaultSprite(damagedSprite);
         if (_displayedHealth > 0) _displayedHealth--;
+    }
+
+    // ==========================================
+    // HELPERS
+    // ==========================================
+
+    public void SetSortingOrder(int order)
+    {
+        if (_spriteRenderer != null)
+            _spriteRenderer.sortingOrder = order;
     }
 }
