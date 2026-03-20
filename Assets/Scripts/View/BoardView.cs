@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using UnityEngine;
 using DG.Tweening;
+using UnityEngine;
 
 /// Thin facade coordinating the three view subsystems:
 ///   CubePool         — object pooling for CubeViews
@@ -12,67 +12,124 @@ using DG.Tweening;
 ///
 /// Also holds all sprite references (SerializedFields) and provides
 /// lookup methods used by the subsystems.
-
 public class BoardView : MonoBehaviour
 {
     [Header("Prefab")]
-    [SerializeField] private GameObject _cubePrefab;
+    [SerializeField]
+    private GameObject _cubePrefab;
 
     [Header("Cube Sprites")]
-    [SerializeField] private Sprite _blueSprite;
-    [SerializeField] private Sprite _redSprite;
-    [SerializeField] private Sprite _yellowSprite;
-    [SerializeField] private Sprite _greenSprite;
+    [SerializeField]
+    private Sprite _blueSprite;
+
+    [SerializeField]
+    private Sprite _redSprite;
+
+    [SerializeField]
+    private Sprite _yellowSprite;
+
+    [SerializeField]
+    private Sprite _greenSprite;
 
     [Header("Rocket Hint Sprites")]
-    [SerializeField] private Sprite _redRocketHint;
-    [SerializeField] private Sprite _blueRocketHint;
-    [SerializeField] private Sprite _greenRocketHint;
-    [SerializeField] private Sprite _yellowRocketHint;
+    [SerializeField]
+    private Sprite _redRocketHint;
+
+    [SerializeField]
+    private Sprite _blueRocketHint;
+
+    [SerializeField]
+    private Sprite _greenRocketHint;
+
+    [SerializeField]
+    private Sprite _yellowRocketHint;
 
     [Header("Obstacle Sprites")]
-    [SerializeField] private Sprite _boxSprite;
-    [SerializeField] private Sprite _stoneSprite;
-    [SerializeField] private Sprite _vaseSprite;
-    [SerializeField] private Sprite _vaseDamagedSprite;
+    [SerializeField]
+    private Sprite _boxSprite;
+
+    [SerializeField]
+    private Sprite _stoneSprite;
+
+    [SerializeField]
+    private Sprite _vaseSprite;
+
+    [SerializeField]
+    private Sprite _vaseDamagedSprite;
 
     [Header("Rocket Sprites")]
-    [SerializeField] private Sprite _verticalRocketSprite;
-    [SerializeField] private Sprite _horizontalRocketSprite;
+    [SerializeField]
+    private Sprite _verticalRocketSprite;
+
+    [SerializeField]
+    private Sprite _horizontalRocketSprite;
 
     [Header("Rocket Part Sprites")]
-    [SerializeField] private Sprite _horizontalPartLeftSprite;
-    [SerializeField] private Sprite _horizontalPartRightSprite;
-    [SerializeField] private Sprite _verticalPartTopSprite;
-    [SerializeField] private Sprite _verticalPartBottomSprite;
+    [SerializeField]
+    private Sprite _horizontalPartLeftSprite;
+
+    [SerializeField]
+    private Sprite _horizontalPartRightSprite;
+
+    [SerializeField]
+    private Sprite _verticalPartTopSprite;
+
+    [SerializeField]
+    private Sprite _verticalPartBottomSprite;
 
     [Header("Cube Particle Sprites")]
-    [SerializeField] private Sprite _particleBlue;
-    [SerializeField] private Sprite _particleRed;
-    [SerializeField] private Sprite _particleGreen;
-    [SerializeField] private Sprite _particleYellow;
+    [SerializeField]
+    private Sprite _particleBlue;
+
+    [SerializeField]
+    private Sprite _particleRed;
+
+    [SerializeField]
+    private Sprite _particleGreen;
+
+    [SerializeField]
+    private Sprite _particleYellow;
 
     [Header("Box Particle Sprites")]
-    [SerializeField] private Sprite _particleBox01;
-    [SerializeField] private Sprite _particleBox02;
-    [SerializeField] private Sprite _particleBox03;
+    [SerializeField]
+    private Sprite _particleBox01;
+
+    [SerializeField]
+    private Sprite _particleBox02;
+
+    [SerializeField]
+    private Sprite _particleBox03;
 
     [Header("Stone Particle Sprites")]
-    [SerializeField] private Sprite _particleStone01;
-    [SerializeField] private Sprite _particleStone02;
-    [SerializeField] private Sprite _particleStone03;
+    [SerializeField]
+    private Sprite _particleStone01;
+
+    [SerializeField]
+    private Sprite _particleStone02;
+
+    [SerializeField]
+    private Sprite _particleStone03;
 
     [Header("Vase Particle Sprites")]
-    [SerializeField] private Sprite _particleVase01;
-    [SerializeField] private Sprite _particleVase02;
-    [SerializeField] private Sprite _particleVase03;
+    [SerializeField]
+    private Sprite _particleVase01;
+
+    [SerializeField]
+    private Sprite _particleVase02;
+
+    [SerializeField]
+    private Sprite _particleVase03;
 
     [Header("Rocket Particle Sprites")]
-    [SerializeField] private Sprite _particleSmoke;
-    [SerializeField] private Sprite _particleStar;
+    [SerializeField]
+    private Sprite _particleSmoke;
+
+    [SerializeField]
+    private Sprite _particleStar;
 
     [Header("Board Frame")]
-    [SerializeField] private SpriteRenderer _boardFrame;
+    [SerializeField]
+    private SpriteRenderer _boardFrame;
 
     // Public accessors for AnimationController
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
@@ -111,7 +168,7 @@ public class BoardView : MonoBehaviour
 
         _offsetX = (board.Width - 1) / 2f;
         _offsetY = (board.Height - 1) / 2f;
-        BoardHeight = board.Height;  // add this line
+        BoardHeight = board.Height; // add this line
 
         _gridState.Clear();
         _particles.ReturnAll();
@@ -120,9 +177,6 @@ public class BoardView : MonoBehaviour
 
         FitCameraToBoard(board.Width, board.Height);
     }
-
-
-
 
     // ==========================================
     // ANIMATION API
@@ -192,31 +246,33 @@ public class BoardView : MonoBehaviour
     // SPRITE LOOKUPS
     // ==========================================
 
-    public Sprite GetSpriteForItem(string itemId) => itemId switch
-    {
-        ItemIds.Blue => _blueSprite,
-        ItemIds.Red => _redSprite,
-        ItemIds.Yellow => _yellowSprite,
-        ItemIds.Green => _greenSprite,
-        ItemIds.Box => _boxSprite,
-        ItemIds.Stone => _stoneSprite,
-        ItemIds.Vase => _vaseSprite,
-        ItemIds.VerticalRocket => _verticalRocketSprite,
-        ItemIds.HorizontalRocket => _horizontalRocketSprite,
-        _ => null,
-    };
+    public Sprite GetSpriteForItem(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Blue => _blueSprite,
+            ItemIds.Red => _redSprite,
+            ItemIds.Yellow => _yellowSprite,
+            ItemIds.Green => _greenSprite,
+            ItemIds.Box => _boxSprite,
+            ItemIds.Stone => _stoneSprite,
+            ItemIds.Vase => _vaseSprite,
+            ItemIds.VerticalRocket => _verticalRocketSprite,
+            ItemIds.HorizontalRocket => _horizontalRocketSprite,
+            _ => null,
+        };
 
     public Sprite GetVaseSprite(int health) =>
         (health <= 1 && _vaseDamagedSprite != null) ? _vaseDamagedSprite : _vaseSprite;
 
-    public Sprite GetHintSpriteForColor(string itemId) => itemId switch
-    {
-        ItemIds.Red => _redRocketHint,
-        ItemIds.Blue => _blueRocketHint,
-        ItemIds.Green => _greenRocketHint,
-        ItemIds.Yellow => _yellowRocketHint,
-        _ => null,
-    };
+    public Sprite GetHintSpriteForColor(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Red => _redRocketHint,
+            ItemIds.Blue => _blueRocketHint,
+            ItemIds.Green => _greenRocketHint,
+            ItemIds.Yellow => _yellowRocketHint,
+            _ => null,
+        };
 
     // ==========================================
     // PARTICLE SPRITE LOOKUPS
@@ -226,27 +282,29 @@ public class BoardView : MonoBehaviour
     /// Get the particle sprite for a cube color.
     /// Returns null for non-cube items.
     /// </summary>
-    public Sprite GetCubeParticleSprite(string itemId) => itemId switch
-    {
-        ItemIds.Blue => _particleBlue,
-        ItemIds.Red => _particleRed,
-        ItemIds.Green => _particleGreen,
-        ItemIds.Yellow => _particleYellow,
-        _ => null,
-    };
+    public Sprite GetCubeParticleSprite(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Blue => _particleBlue,
+            ItemIds.Red => _particleRed,
+            ItemIds.Green => _particleGreen,
+            ItemIds.Yellow => _particleYellow,
+            _ => null,
+        };
 
     /// <summary>
     /// Get the particle sprites for an obstacle type.
     /// Returns array of fragment sprites (randomly picked per particle).
     /// Returns null for non-obstacle items.
     /// </summary>
-    public Sprite[] GetObstacleParticleSprites(string itemId) => itemId switch
-    {
-        ItemIds.Box => new[] { _particleBox01, _particleBox02, _particleBox03 },
-        ItemIds.Stone => new[] { _particleStone01, _particleStone02, _particleStone03 },
-        ItemIds.Vase => new[] { _particleVase01, _particleVase02, _particleVase03 },
-        _ => null,
-    };
+    public Sprite[] GetObstacleParticleSprites(string itemId) =>
+        itemId switch
+        {
+            ItemIds.Box => new[] { _particleBox01, _particleBox02, _particleBox03 },
+            ItemIds.Stone => new[] { _particleStone01, _particleStone02, _particleStone03 },
+            ItemIds.Vase => new[] { _particleVase01, _particleVase02, _particleVase03 },
+            _ => null,
+        };
 
     /// <summary>Smoke sprite for rocket trails and explosions.</summary>
     public Sprite ParticleSmoke => _particleSmoke;
@@ -258,9 +316,31 @@ public class BoardView : MonoBehaviour
     // CAMERA & BACKGROUND
     // ==========================================
 
+    private void FitBoardFrame(int boardWidth, int boardHeight)
+    {
+        if (_boardFrame == null)
+            return;
+
+        // Use 9-slice mode — stretches center and edges, keeps corners intact
+        _boardFrame.drawMode = SpriteDrawMode.Sliced;
+
+        // Size in world units — tightly wraps the board with a small border
+        float padding_y = 0.33f;
+        float padding_x = 0.2f;
+        _boardFrame.size = new Vector2(boardWidth + padding_x, boardHeight + padding_y);
+
+        // Keep scale at 1 — size is controlled by the sliced size, not scale
+        _boardFrame.transform.localScale = Vector3.one;
+        _boardFrame.transform.position = new Vector3(0, 0, 0.1f);
+
+        // Ensure correct sorting
+        _boardFrame.sortingOrder = -1;
+    }
+
     private void FitCameraToBoard(int boardWidth, int boardHeight)
     {
-        if (Camera.main == null) return;
+        if (Camera.main == null)
+            return;
 
         float topUIPadding = 3.5f;
         float bottomPadding = 0.5f;
@@ -276,6 +356,6 @@ public class BoardView : MonoBehaviour
         float verticalOffset = (topUIPadding - bottomPadding) / 2f;
         Camera.main.transform.position = new Vector3(0, verticalOffset, -10f);
 
-
+        FitBoardFrame(boardWidth, boardHeight);
     }
 }

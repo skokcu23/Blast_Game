@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 4a67124df4583d9dba9fb15dff96b47d
+guid: 6e2b223ecb3bc03c4912ab3824ea5591
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 5179210394643481817
-    second: 534-5345580_button-green-blank-blank-buttons-png-transparent-png_0
+      213: 5258157214335778477
+    second: button_mirrored_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -48,10 +48,10 @@ TextureImporter:
   compressionQuality: 50
   spriteMode: 2
   spriteExtrude: 1
-  spriteMeshType: 1
+  spriteMeshType: 0
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 185
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -113,23 +113,23 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: 534-5345580_button-green-blank-blank-buttons-png-transparent-png_0
+      name: button_mirrored_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 860
-        height: 335
+        x: 1
+        y: 1
+        width: 164
+        height: 265
       alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 36, y: 34, z: 36, w: 34}
       customData: 
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 9d44cbdc96040e740800000000000000
-      internalID: 5179210394643481817
+      spriteID: dae34a5a02ab8f840800000000000000
+      internalID: 5258157214335778477
       vertices: []
       indices: 
       edges: []
@@ -138,7 +138,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 0b71e9178c107f8cd9d4842a0dd66f68
     internalID: 0
     vertices: []
     indices: 
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      534-5345580_button-green-blank-blank-buttons-png-transparent-png_0: 5179210394643481817
+      button_mirrored_0: 5258157214335778477
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
