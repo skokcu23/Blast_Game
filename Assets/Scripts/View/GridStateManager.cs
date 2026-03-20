@@ -4,10 +4,9 @@ using UnityEngine;
 /// <summary>
 /// Single owner of the visual cell registry.
 ///
-/// Layer separation: animation methods receive only the data they need
-/// (Dictionary of obstacle healths), never the full Board object.
-/// Only SyncWithBoard (safety net) receives Board — it's called by
-/// the Orchestrator, which is the designated mediator between layers.
+/// Damage visuals: AnimationController calls CubeView.ApplyDamageVisual directly
+/// using pre-gravity DamagedObstacles coordinates. No manager involvement needed.
+/// SyncWithBoard catches any remaining health mismatches as a safety net.
 /// </summary>
 public class GridStateManager
 {
@@ -103,11 +102,6 @@ public class GridStateManager
         _pool.ReturnAll();
     }
 
-    /// <summary>
-    /// Spawn visuals for all non-empty cells. Obstacles get health tracking.
-    /// This is the ONLY place that reads Board directly — during initialization,
-    /// called by BoardView.Initialize which is called by the Orchestrator.
-    /// </summary>
     public void SpawnAll(Board board)
     {
         for (int x = 0; x < board.Width; x++)
@@ -134,15 +128,9 @@ public class GridStateManager
     }
 
     // ==========================================
-    // SYNC WITH BOARD (Safety Net — Orchestrator mediates)
+    // SYNC WITH BOARD (Safety Net)
     // ==========================================
 
-    /// <summary>
-    /// Safety net. Called by Orchestrator (the layer mediator) after every turn.
-    /// This is the only animation-phase method that receives Board directly,
-    /// because it needs full board access for comprehensive reconciliation.
-    /// Logs warnings for any fix — warnings indicate animation bugs.
-    /// </summary>
     public void SyncWithBoard(Board board)
     {
         List<Coordinate> toRemove = new List<Coordinate>();
@@ -202,29 +190,22 @@ public class GridStateManager
             }
         }
 
-        // Final health refresh using snapshot
-        var healthSnapshot = BuildHealthSnapshot(board);
-        RefreshObstacleVisuals(healthSnapshot);
-    }
-
-    /// <summary>
-    /// Build a health snapshot from the board. Used internally by SyncWithBoard.
-    /// The Orchestrator builds its own snapshots for animation steps.
-    /// </summary>
-    private Dictionary<Coordinate, int> BuildHealthSnapshot(Board board)
-    {
-        var snapshot = new Dictionary<Coordinate, int>();
+        // Safety net: fix vase sprites based on actual health
         for (int x = 0; x < board.Width; x++)
         {
             for (int y = 0; y < board.Height; y++)
             {
-                var coord = new Coordinate(x, y);
-                var item = board.GetItem(coord);
-                if (item.Id == ItemIds.Vase && item.IsAlive)
-                    snapshot[coord] = item.Health;
+                Coordinate coord = new Coordinate(x, y);
+                GridItem item = board.GetItem(coord);
+
+                if (item.Id == ItemIds.Vase && _cells.TryGetValue(coord, out var view) && view != null)
+                {
+                    Sprite correctSprite = _boardView.GetVaseSprite(item.Health);
+                    view.SetSprite(correctSprite);
+                    view.SetDefaultSprite(correctSprite);
+                }
             }
         }
-        return snapshot;
     }
 
     // ==========================================
@@ -247,33 +228,6 @@ public class GridStateManager
             else
             {
                 view.RemoveHint();
-            }
-        }
-    }
-
-    // ==========================================
-    // DERIVED STATE: Health Visuals (Stateless, Idempotent)
-    // ==========================================
-
-    /// <summary>
-    /// Refresh obstacle visuals using a health snapshot.
-    /// The snapshot is a Dictionary mapping Coordinate → current health
-    /// for all living vases. Built by the Orchestrator from Board state.
-    ///
-    /// View layer never sees Board — only this lightweight data.
-    /// </summary>
-    public void RefreshObstacleVisuals(Dictionary<Coordinate, int> obstacleHealth)
-    {
-        foreach (var kvp in _cells)
-        {
-            CubeView view = kvp.Value;
-            if (view == null) continue;
-            if (view.ItemId != ItemIds.Vase) continue;
-
-            if (obstacleHealth.TryGetValue(kvp.Key, out int health))
-            {
-                Sprite correctSprite = _boardView.GetVaseSprite(health);
-                view.SetHealthVisual(health, correctSprite);
             }
         }
     }

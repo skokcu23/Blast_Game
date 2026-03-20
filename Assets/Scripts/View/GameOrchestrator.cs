@@ -6,14 +6,10 @@ using UnityEngine;
 /// <summary>
 /// Layer mediator: Logic (GameSession) → View (BoardView).
 ///
-/// The Orchestrator is the ONLY class that reads Board and passes
-/// data to the View. It builds lightweight snapshots (obstacle health dict)
-/// so the View never directly accesses logic layer objects.
-///
-/// Board access pattern:
-///   Initialize:    Orchestrator passes Board to BoardView.Initialize (setup)
-///   Per step:      Orchestrator builds health snapshot → passes dict to View
-///   Reconcile:     Orchestrator passes Board to BoardView.ReconcileWithBoard (safety net)
+/// Clean separation: animation methods receive only DTOs.
+/// No health snapshots. Damage visuals handled internally by AnimationController.
+/// Board access: only in Initialize, ReconcileWithBoard, and BuildObstacleHealthSnapshot
+/// (which is now removed — no longer needed).
 /// </summary>
 public class GameOrchestrator : MonoBehaviour
 {
@@ -128,9 +124,7 @@ public class GameOrchestrator : MonoBehaviour
         {
             await AnimateTurnSteps(turnResult);
 
-            // Safety net — Orchestrator mediates Board access
             _boardView.ReconcileWithBoard(_session.Board);
-
             _boardView.UpdateRocketHints(turnResult.HintData);
 
             if (_gameplayUI != null)
@@ -155,35 +149,7 @@ public class GameOrchestrator : MonoBehaviour
     }
 
     // ==========================================
-    // HEALTH SNAPSHOT — Mediator builds View data from Logic state
-    // ==========================================
-
-    /// <summary>
-    /// Build a lightweight snapshot of obstacle health from the Board.
-    /// Only includes living vases — the only obstacle with visible health states.
-    /// The View uses this to update crack visuals without accessing Board directly.
-    /// </summary>
-    private Dictionary<Coordinate, int> BuildObstacleHealthSnapshot()
-    {
-        Board board = _session.Board;
-        var snapshot = new Dictionary<Coordinate, int>();
-
-        for (int x = 0; x < board.Width; x++)
-        {
-            for (int y = 0; y < board.Height; y++)
-            {
-                var coord = new Coordinate(x, y);
-                var item = board.GetItem(coord);
-                if (item.Id == ItemIds.Vase && item.IsAlive)
-                    snapshot[coord] = item.Health;
-            }
-        }
-
-        return snapshot;
-    }
-
-    // ==========================================
-    // STEP DISPATCHER
+    // STEP DISPATCHER — Clean, no health data
     // ==========================================
 
     private async Task AnimateTurnSteps(TurnResult turnResult)
@@ -193,11 +159,11 @@ public class GameOrchestrator : MonoBehaviour
             switch (step.Type)
             {
                 case TurnStepType.Blast:
-                    await _boardView.AnimateBlast(step.BlastData, BuildObstacleHealthSnapshot());
+                    await _boardView.AnimateBlast(step.BlastData);
                     break;
 
                 case TurnStepType.BlastForRocket:
-                    await _boardView.AnimateRocketCreation(step.BlastData, BuildObstacleHealthSnapshot());
+                    await _boardView.AnimateRocketCreation(step.BlastData);
                     break;
 
                 case TurnStepType.RocketCreated:
@@ -206,18 +172,15 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.RocketExplosion:
-                    await _boardView.AnimateRocketExplosion(step.ExplosionData, BuildObstacleHealthSnapshot());
+                    await _boardView.AnimateRocketExplosion(step.ExplosionData);
                     break;
 
                 case TurnStepType.ComboExplosion:
-                {
-                    var healthSnapshot = BuildObstacleHealthSnapshot();
                     List<Task> comboTasks = new List<Task>();
                     foreach (var data in step.ComboExplosionData)
-                        comboTasks.Add(_boardView.AnimateRocketExplosion(data, healthSnapshot));
+                        comboTasks.Add(_boardView.AnimateRocketExplosion(data));
                     await Task.WhenAll(comboTasks);
                     break;
-                }
 
                 case TurnStepType.Gravity:
                     await _boardView.AnimateGravity(step.GravityData);
@@ -228,7 +191,7 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.UpdateDamagedSprites:
-                    // NO-OP: vase cracks are derived state.
+                    // NO-OP: damage visuals handled by CrackDamagedVases
                     break;
             }
         }

@@ -6,12 +6,9 @@ using DG.Tweening;
 /// <summary>
 /// Thin facade coordinating the three view subsystems.
 ///
-/// LAYER RULE: Animation methods never receive Board.
-/// They receive Dictionary&lt;Coordinate, int&gt; obstacleHealth —
-/// a lightweight snapshot built by the Orchestrator (the layer mediator).
-///
-/// Only Initialize and ReconcileWithBoard receive Board,
-/// both called directly by the Orchestrator.
+/// Animation API is clean — no Board, no health snapshots, no damage step.
+/// Each animation method receives only the DTO it needs.
+/// Damage visuals handled internally by AnimationController.CrackDamagedVases.
 /// </summary>
 public class BoardView : MonoBehaviour
 {
@@ -49,7 +46,6 @@ public class BoardView : MonoBehaviour
     [Header("Background")]
     [SerializeField] private SpriteRenderer _levelBackground;
 
-    // Public accessors for AnimationController
     public Sprite HorizontalPartLeftSprite => _horizontalPartLeftSprite;
     public Sprite HorizontalPartRightSprite => _horizontalPartRightSprite;
     public Sprite VerticalPartTopSprite => _verticalPartTopSprite;
@@ -72,7 +68,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // INITIALIZATION (receives Board — called by Orchestrator)
+    // INITIALIZATION
     // ==========================================
 
     public void Initialize(Board board)
@@ -90,17 +86,17 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // ANIMATION API (receives health snapshot, never Board)
+    // ANIMATION API — Clean, no Board, no snapshots
     // ==========================================
 
-    public async Task AnimateBlast(BlastResult result, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task AnimateBlast(BlastResult result)
     {
-        await _animator.PlayBlast(result, obstacleHealth);
+        await _animator.PlayBlast(result);
     }
 
-    public async Task AnimateRocketCreation(BlastResult blastResult, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task AnimateRocketCreation(BlastResult blastResult)
     {
-        await _animator.PlayRocketCreation(blastResult, obstacleHealth);
+        await _animator.PlayRocketCreation(blastResult);
     }
 
     public void SpawnRocketVisual(RocketCreationData data)
@@ -108,9 +104,9 @@ public class BoardView : MonoBehaviour
         _animator.PlayRocketSpawn(data);
     }
 
-    public async Task AnimateRocketExplosion(RocketExplosionData data, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task AnimateRocketExplosion(RocketExplosionData data)
     {
-        await _animator.PlayRocketExplosion(data, obstacleHealth);
+        await _animator.PlayRocketExplosion(data);
     }
 
     public async Task AnimateGravity(List<ItemMovement> movements)
@@ -124,7 +120,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // RECONCILIATION (receives Board — Orchestrator mediates)
+    // RECONCILIATION & HINTS
     // ==========================================
 
     public void ReconcileWithBoard(Board board)

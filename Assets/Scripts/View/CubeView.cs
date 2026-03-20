@@ -4,12 +4,11 @@ using DG.Tweening;
 /// <summary>
 /// Visual representation of a single grid cell.
 ///
-/// Two derived visual systems (both idempotent, both stateless from manager's perspective):
-///   Hints:  ApplyHint/RemoveHint — swaps sprite based on group membership
-///   Health: SetHealthVisual — animates crack based on obstacle HP
+/// Two derived visual systems:
+///   Hints:  ApplyHint/RemoveHint — sprite swap based on group membership
+///   Damage: ApplyDamageVisual — instant sprite swap when obstacle takes damage
 ///
-/// Both follow the same pattern: the CubeView tracks its current display state
-/// internally, and only animates when the state actually changes.
+/// Both are idempotent. No animation timing conflicts.
 /// </summary>
 public class CubeView : MonoBehaviour
 {
@@ -20,7 +19,7 @@ public class CubeView : MonoBehaviour
 
     private Sprite _defaultSprite;
     private bool _isHinted;
-    private int _displayedHealth; // -1 = not tracking (non-obstacle)
+    private int _displayedHealth;
 
     // ==========================================
     // LIFECYCLE
@@ -40,9 +39,6 @@ public class CubeView : MonoBehaviour
         name = $"Cell_{coord.x}_{coord.y}";
     }
 
-    /// <summary>
-    /// Configure with initial health tracking (for obstacles like vases).
-    /// </summary>
     public void ConfigureWithHealth(Coordinate coord, Sprite sprite, string itemId, int health)
     {
         Configure(coord, sprite, itemId);
@@ -53,7 +49,6 @@ public class CubeView : MonoBehaviour
     {
         DOTween.Kill(transform);
         DOTween.Kill(transform, "hint");
-        DOTween.Kill(transform, "damage");
 
         ItemId = null;
         GridCoordinate = default;
@@ -124,47 +119,21 @@ public class CubeView : MonoBehaviour
     }
 
     // ==========================================
-    // HEALTH VISUAL (Derived State, Idempotent)
+    // DAMAGE VISUAL (Instant, No Animation)
     // ==========================================
 
     /// <summary>
-    /// Update the obstacle's visual to match its actual health.
-    /// Idempotent: no-op if already displaying this health.
-    /// Animates with squash + sprite swap when health changes.
+    /// Apply damage visual instantly. Swaps sprite on this frame.
+    /// No squash, no sequence, no timing conflicts with gravity.
     ///
-    /// Call this as many times as you want from any step —
-    /// only the first call that detects a change triggers animation.
+    /// Called directly by AnimationController using pre-gravity coordinates
+    /// from the step's DamagedObstacles list — guaranteed to find the right CubeView.
     /// </summary>
-    public void SetHealthVisual(int actualHealth, Sprite correctSprite)
+    public void ApplyDamageVisual(Sprite damagedSprite)
     {
-        if (_displayedHealth == actualHealth) return;
-
-        _displayedHealth = actualHealth;
-
-        DOTween.Kill(transform, "damage");
-
-        Sequence seq = DOTween.Sequence();
-        seq.SetId("damage");
-
-        // Squash in
-        seq.Append(transform
-            .DOScale(new Vector3(0.75f, 1.15f, 1f), 0.08f)
-            .SetEase(Ease.OutQuad));
-
-        // Sprite swap at peak of squash
-        seq.AppendCallback(() =>
-        {
-            SetSprite(correctSprite);
-            SetDefaultSprite(correctSprite);
-        });
-
-        // Bounce back
-        seq.Append(transform
-            .DOScale(new Vector3(1.05f, 0.9f, 1f), 0.08f)
-            .SetEase(Ease.OutQuad));
-
-        seq.Append(transform
-            .DOScale(new Vector3(0.95f, 0.95f, 1f), 0.12f)
-            .SetEase(Ease.OutBounce));
+        if (damagedSprite == null) return;
+        SetSprite(damagedSprite);
+        SetDefaultSprite(damagedSprite);
+        if (_displayedHealth > 0) _displayedHealth--;
     }
 }

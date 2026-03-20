@@ -6,12 +6,12 @@ using DG.Tweening;
 /// <summary>
 /// Purely cosmetic animation layer.
 ///
-/// LAYER RULE: Never receives Board. Only receives view-layer data:
-///   - BlastResult, RocketExplosionData, etc. (DTOs from logic, read-only)
-///   - Dictionary&lt;Coordinate, int&gt; obstacleHealth (snapshot built by Orchestrator)
+/// Damage visuals: each step calls CrackDamagedVases() BEFORE awaiting
+/// its main animation. This uses pre-gravity coordinates from the step's
+/// DamagedObstacles list — guaranteed to find the right CubeView.
+/// The crack is an instant sprite swap — no animation, no timing conflicts.
 ///
-/// After each damage-causing step, calls RefreshObstacleVisuals with
-/// the health snapshot. CubeView.SetHealthVisual handles the rest idempotently.
+/// No Board parameter. No health snapshot. No shake animation.
 /// </summary>
 public class AnimationController
 {
@@ -23,8 +23,6 @@ public class AnimationController
     private const float MERGE_DURATION = 0.2f;
     private const float GRAVITY_DURATION = 0.25f;
     private const float REFILL_DURATION = 0.35f;
-    private const float SHAKE_DURATION = 0.2f;
-    private const float SHAKE_STRENGTH = 0.08f;
     private const float PROJECTILE_SPEED = 0.03f;
     private const float ROCKET_SPAWN_DURATION = 0.25f;
 
@@ -41,11 +39,35 @@ public class AnimationController
     }
 
     // ==========================================
+    // CRACK HELPER — instant sprite swap on damaged vases
+    // ==========================================
+
+    /// <summary>
+    /// Instantly crack all damaged vases using pre-gravity coordinates.
+    /// Called BEFORE the main animation sequence so the crack is visible
+    /// on the same frame, even if gravity starts immediately after.
+    /// </summary>
+    private void CrackDamagedVases(List<Coordinate> damagedObstacles)
+    {
+        if (damagedObstacles == null) return;
+
+        foreach (var coord in damagedObstacles)
+        {
+            CubeView view = _gridState.GetCell(coord);
+            if (view != null && view.ItemId == ItemIds.Vase)
+                view.ApplyDamageVisual(_boardView.GetVaseSprite(1));
+        }
+    }
+
+    // ==========================================
     // BLAST
     // ==========================================
 
-    public async Task PlayBlast(BlastResult result, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task PlayBlast(BlastResult result)
     {
+        // Crack vases instantly — before any animation
+        CrackDamagedVases(result.DamagedObstacles);
+
         Sequence seq = DOTween.Sequence();
 
         foreach (var coord in result.BlastedCoordinates)
@@ -62,24 +84,18 @@ public class AnimationController
                 seq.Join(CreatePopTween(view, coord));
         }
 
-        foreach (var coord in result.DamagedObstacles)
-        {
-            CubeView view = _gridState.GetCell(coord);
-            if (view != null)
-                seq.Join(CreateShakeTween(view));
-        }
-
         await seq.ToTask();
-
-        _gridState.RefreshObstacleVisuals(obstacleHealth);
     }
 
     // ==========================================
     // ROCKET CREATION
     // ==========================================
 
-    public async Task PlayRocketCreation(BlastResult blastResult, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task PlayRocketCreation(BlastResult blastResult)
     {
+        // Crack vases instantly
+        CrackDamagedVases(blastResult.DamagedObstacles);
+
         Coordinate tapped = blastResult.RocketSpawnPosition;
         Vector3 targetPos = _boardView.GridToWorld(tapped);
         Sequence seq = DOTween.Sequence();
@@ -117,16 +133,7 @@ public class AnimationController
                 seq.Join(CreatePopTween(view, coord));
         }
 
-        foreach (var coord in blastResult.DamagedObstacles)
-        {
-            CubeView view = _gridState.GetCell(coord);
-            if (view != null)
-                seq.Join(CreateShakeTween(view));
-        }
-
         await seq.ToTask();
-
-        _gridState.RefreshObstacleVisuals(obstacleHealth);
     }
 
     // ==========================================
@@ -149,25 +156,28 @@ public class AnimationController
     // ROCKET EXPLOSION
     // ==========================================
 
-    public async Task PlayRocketExplosion(RocketExplosionData data, Dictionary<Coordinate, int> obstacleHealth)
+    public async Task PlayRocketExplosion(RocketExplosionData data)
     {
         // 1. Remove rocket at origin
         _gridState.RemoveCell(data.Origin);
 
-        // 1b. Combo: clear visuals for emptied 3×3 cells
+        // 1b. Combo: clear emptied 3×3 cells
         if (data.IsCombo && data.ComboAreaCleared != null)
         {
             foreach (var coord in data.ComboAreaCleared)
                 _gridState.RemoveCell(coord);
         }
 
-        // 2. Build destroyed set
+        // 2. Crack damaged vases instantly — before projectile animation
+        CrackDamagedVases(data.DamagedObstacles);
+
+        // 3. Build destroyed set
         HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
         foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
         foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
         foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
 
-        // 3. Determine sprites
+        // 4. Determine sprites
         Sprite partASprite, partBSprite;
         if (data.IsHorizontal)
         {
@@ -180,25 +190,22 @@ public class AnimationController
             partBSprite = _boardView.VerticalPartTopSprite;
         }
 
-        // 4. Direction vectors
+        // 5. Direction vectors
         int dirAx, dirAy, dirBx, dirBy;
         if (data.IsHorizontal)
         { dirAx = -1; dirAy = 0; dirBx = 1; dirBy = 0; }
         else
         { dirAx = 0; dirAy = -1; dirBx = 0; dirBy = 1; }
 
-        // 5. Animate
+        // 6. Animate projectiles
         if (data.IsCombo)
             await AnimateComboProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
         else
             await AnimateSingleProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
 
-        // 6. Cleanup remaining
+        // 7. Cleanup remaining
         foreach (var coord in allDestroyed)
             _gridState.RemoveCell(coord);
-
-        // 7. Refresh obstacle visuals
-        _gridState.RefreshObstacleVisuals(obstacleHealth);
     }
 
     private async Task AnimateSingleProjectiles(
@@ -313,7 +320,7 @@ public class AnimationController
     }
 
     // ==========================================
-    // GRAVITY (no damage — no refresh)
+    // GRAVITY
     // ==========================================
 
     public async Task PlayGravity(List<ItemMovement> movements)
@@ -337,7 +344,7 @@ public class AnimationController
     }
 
     // ==========================================
-    // REFILL (no damage — no refresh)
+    // REFILL
     // ==========================================
 
     public async Task PlayRefill(List<ItemMovement> newItems)
@@ -360,7 +367,7 @@ public class AnimationController
     }
 
     // ==========================================
-    // TWEEN FACTORIES
+    // TWEEN FACTORY
     // ==========================================
 
     private Tween CreatePopTween(CubeView view, Coordinate coord)
@@ -375,12 +382,5 @@ public class AnimationController
                 .DOScale(Vector3.zero, POP_DURATION * 0.6f)
                 .SetEase(Ease.InQuad))
             .OnComplete(() => _gridState.RemoveCell(capturedCoord));
-    }
-
-    private Tween CreateShakeTween(CubeView view)
-    {
-        return view.transform
-            .DOShakePosition(SHAKE_DURATION, SHAKE_STRENGTH, 10, 90, false, true, ShakeRandomnessMode.Harmonic)
-            .SetEase(Ease.OutQuad);
     }
 }
