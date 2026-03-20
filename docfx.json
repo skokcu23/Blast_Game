@@ -1,0 +1,64 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": [
+            "Data/**.cs",
+            "Logic/**.cs"
+          ],
+          "src": "Assets/Scripts"
+        }
+      ],
+      "src": [
+        {
+          "files": [
+            "Data/**.cs",
+            "Logic/**.cs"
+          ],
+          "exclude": [
+            "Logic/LevelParser.cs"
+          ],
+          "src": "Assets/Scripts"
+        }
+      ],
+      "dest": "api",
+      "filter": "filterConfig.yml"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": [
+          "api/**.yml",
+          "api/index.md"
+        ]
+      },
+      {
+        "files": [
+          "docs/**.md",
+          "docs/**/toc.yml",
+          "toc.yml",
+          "*.md"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "files": [
+          "images/**"
+        ]
+      }
+    ],
+    "output": "_site",
+    "template": [
+      "default",
+      "modern"
+    ],
+    "globalMetadata": {
+      "_appTitle": "Blast Game — API Documentation",
+      "_appFooter": "Dream Games Software Engineering Case Study",
+      "_enableSearch": true
+    }
+  }
+}
