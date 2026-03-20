@@ -5,10 +5,7 @@ using DG.Tweening;
 
 /// <summary>
 /// Thin facade coordinating the three view subsystems.
-///
-/// Animation API is clean — no Board, no health snapshots, no damage step.
-/// Each animation method receives only the DTO it needs.
-/// Damage visuals handled internally by AnimationController.CrackDamagedVases.
+/// Clean API: each method takes only its DTO. No Board, no snapshots.
 /// </summary>
 public class BoardView : MonoBehaviour
 {
@@ -86,7 +83,7 @@ public class BoardView : MonoBehaviour
     }
 
     // ==========================================
-    // ANIMATION API — Clean, no Board, no snapshots
+    // ANIMATION API
     // ==========================================
 
     public async Task AnimateBlast(BlastResult result)
@@ -104,9 +101,24 @@ public class BoardView : MonoBehaviour
         _animator.PlayRocketSpawn(data);
     }
 
+    /// <summary>
+    /// Rocket spawn pause duration in seconds. Orchestrator uses this
+    /// for a DOTween-based delay that respects Time.timeScale.
+    /// </summary>
+    public float RocketSpawnPause => _animator.RocketSpawnPause;
+
     public async Task AnimateRocketExplosion(RocketExplosionData data)
     {
         await _animator.PlayRocketExplosion(data);
+    }
+
+    /// <summary>
+    /// Combo explosion: 3×3 cleanup once, vase cracks once,
+    /// then H and V projectile animations in parallel.
+    /// </summary>
+    public async Task AnimateComboExplosion(List<RocketExplosionData> explosions)
+    {
+        await _animator.PlayComboExplosion(explosions);
     }
 
     public async Task AnimateGravity(List<ItemMovement> movements)

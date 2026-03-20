@@ -6,12 +6,11 @@ using DG.Tweening;
 /// <summary>
 /// Purely cosmetic animation layer.
 ///
-/// Damage visuals: each step calls CrackDamagedVases() BEFORE awaiting
-/// its main animation. This uses pre-gravity coordinates from the step's
-/// DamagedObstacles list — guaranteed to find the right CubeView.
-/// The crack is an instant sprite swap — no animation, no timing conflicts.
+/// Damage visuals: each step calls CrackDamagedVases() using pre-gravity
+/// coordinates from the step's DamagedObstacles list.
 ///
-/// No Board parameter. No health snapshot. No shake animation.
+/// Combo: PlayComboExplosion handles 3×3 cleanup and vase cracks ONCE,
+/// then fires H and V projectiles in parallel. No redundant operations.
 /// </summary>
 public class AnimationController
 {
@@ -25,6 +24,7 @@ public class AnimationController
     private const float REFILL_DURATION = 0.35f;
     private const float PROJECTILE_SPEED = 0.03f;
     private const float ROCKET_SPAWN_DURATION = 0.25f;
+    private const float ROCKET_SPAWN_PAUSE = 0.2f; // Pause after rocket pop-in
 
     private const Ease GRAVITY_EASE = Ease.OutBounce;
     private const Ease REFILL_EASE = Ease.OutQuad;
@@ -38,15 +38,16 @@ public class AnimationController
         _parent = parent;
     }
 
+    /// <summary>
+    /// Pause duration after rocket spawn animation (in seconds).
+    /// Public so the Orchestrator can use it for the DOTween delay.
+    /// </summary>
+    public float RocketSpawnPause => ROCKET_SPAWN_PAUSE;
+
     // ==========================================
-    // CRACK HELPER — instant sprite swap on damaged vases
+    // CRACK HELPER
     // ==========================================
 
-    /// <summary>
-    /// Instantly crack all damaged vases using pre-gravity coordinates.
-    /// Called BEFORE the main animation sequence so the crack is visible
-    /// on the same frame, even if gravity starts immediately after.
-    /// </summary>
     private void CrackDamagedVases(List<Coordinate> damagedObstacles)
     {
         if (damagedObstacles == null) return;
@@ -65,7 +66,6 @@ public class AnimationController
 
     public async Task PlayBlast(BlastResult result)
     {
-        // Crack vases instantly — before any animation
         CrackDamagedVases(result.DamagedObstacles);
 
         Sequence seq = DOTween.Sequence();
@@ -93,7 +93,6 @@ public class AnimationController
 
     public async Task PlayRocketCreation(BlastResult blastResult)
     {
-        // Crack vases instantly
         CrackDamagedVases(blastResult.DamagedObstacles);
 
         Coordinate tapped = blastResult.RocketSpawnPosition;
@@ -153,7 +152,7 @@ public class AnimationController
     }
 
     // ==========================================
-    // ROCKET EXPLOSION
+    // SINGLE ROCKET EXPLOSION
     // ==========================================
 
     public async Task PlayRocketExplosion(RocketExplosionData data)
@@ -161,14 +160,7 @@ public class AnimationController
         // 1. Remove rocket at origin
         _gridState.RemoveCell(data.Origin);
 
-        // 1b. Combo: clear emptied 3×3 cells
-        if (data.IsCombo && data.ComboAreaCleared != null)
-        {
-            foreach (var coord in data.ComboAreaCleared)
-                _gridState.RemoveCell(coord);
-        }
-
-        // 2. Crack damaged vases instantly — before projectile animation
+        // 2. Crack damaged vases instantly
         CrackDamagedVases(data.DamagedObstacles);
 
         // 3. Build destroyed set
@@ -177,35 +169,104 @@ public class AnimationController
         foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
         foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
 
-        // 4. Determine sprites
+        // 4. Determine sprites + directions
         Sprite partASprite, partBSprite;
+        int dirAx, dirAy, dirBx, dirBy;
+        GetProjectileConfig(data, out partASprite, out partBSprite,
+            out dirAx, out dirAy, out dirBx, out dirBy);
+
+        // 5. Animate single projectiles
+        await AnimateSingleProjectiles(data, partASprite, partBSprite,
+            allDestroyed, dirAx, dirAy, dirBx, dirBy);
+
+        // 6. Cleanup remaining
+        foreach (var coord in allDestroyed)
+            _gridState.RemoveCell(coord);
+    }
+
+    // ==========================================
+    // COMBO EXPLOSION (Fix 1: cleanup once, parallel fire)
+    // ==========================================
+
+    /// <summary>
+    /// Handle a combo explosion: 3×3 cleanup ONCE, crack vases ONCE,
+    /// then fire H and V projectile animations in parallel.
+    /// Called by BoardView.AnimateComboExplosion.
+    /// </summary>
+    public async Task PlayComboExplosion(List<RocketExplosionData> explosions)
+    {
+        if (explosions == null || explosions.Count == 0) return;
+
+        // 1. Clear 3×3 area ONCE (shared between both explosions)
+        var comboAreaCleared = explosions[0].ComboAreaCleared;
+        if (comboAreaCleared != null)
+        {
+            foreach (var coord in comboAreaCleared)
+                _gridState.RemoveCell(coord);
+        }
+
+        // 2. Crack damaged vases ONCE (merge both explosions' lists)
+        foreach (var data in explosions)
+            CrackDamagedVases(data.DamagedObstacles);
+
+        // 3. Fire all projectile animations in parallel
+        List<Task> tasks = new List<Task>();
+
+        foreach (var data in explosions)
+        {
+            HashSet<Coordinate> allDestroyed = new HashSet<Coordinate>();
+            foreach (var c in data.DestroyedCubes) allDestroyed.Add(c);
+            foreach (var c in data.DestroyedObstacles) allDestroyed.Add(c);
+            foreach (var c in data.TriggeredRockets) allDestroyed.Add(c);
+
+            Sprite partASprite, partBSprite;
+            int dirAx, dirAy, dirBx, dirBy;
+            GetProjectileConfig(data, out partASprite, out partBSprite,
+                out dirAx, out dirAy, out dirBx, out dirBy);
+
+            tasks.Add(AnimateComboProjectilesAndCleanup(data, partASprite, partBSprite,
+                allDestroyed, dirAx, dirAy, dirBx, dirBy));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    /// <summary>
+    /// Animate combo projectiles for one direction (H or V) then cleanup.
+    /// Does NOT do 3×3 cleanup or vase cracks — PlayComboExplosion handles those.
+    /// </summary>
+    private async Task AnimateComboProjectilesAndCleanup(
+        RocketExplosionData data, Sprite spriteA, Sprite spriteB,
+        HashSet<Coordinate> allDestroyed,
+        int dirAx, int dirAy, int dirBx, int dirBy)
+    {
+        await AnimateComboProjectiles(data, spriteA, spriteB,
+            allDestroyed, dirAx, dirAy, dirBx, dirBy);
+
+        foreach (var coord in allDestroyed)
+            _gridState.RemoveCell(coord);
+    }
+
+    // ==========================================
+    // PROJECTILE HELPERS
+    // ==========================================
+
+    private void GetProjectileConfig(RocketExplosionData data,
+        out Sprite partASprite, out Sprite partBSprite,
+        out int dirAx, out int dirAy, out int dirBx, out int dirBy)
+    {
         if (data.IsHorizontal)
         {
             partASprite = _boardView.HorizontalPartLeftSprite;
             partBSprite = _boardView.HorizontalPartRightSprite;
+            dirAx = -1; dirAy = 0; dirBx = 1; dirBy = 0;
         }
         else
         {
             partASprite = _boardView.VerticalPartBottomSprite;
             partBSprite = _boardView.VerticalPartTopSprite;
+            dirAx = 0; dirAy = -1; dirBx = 0; dirBy = 1;
         }
-
-        // 5. Direction vectors
-        int dirAx, dirAy, dirBx, dirBy;
-        if (data.IsHorizontal)
-        { dirAx = -1; dirAy = 0; dirBx = 1; dirBy = 0; }
-        else
-        { dirAx = 0; dirAy = -1; dirBx = 0; dirBy = 1; }
-
-        // 6. Animate projectiles
-        if (data.IsCombo)
-            await AnimateComboProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
-        else
-            await AnimateSingleProjectiles(data, partASprite, partBSprite, allDestroyed, dirAx, dirAy, dirBx, dirBy);
-
-        // 7. Cleanup remaining
-        foreach (var coord in allDestroyed)
-            _gridState.RemoveCell(coord);
     }
 
     private async Task AnimateSingleProjectiles(

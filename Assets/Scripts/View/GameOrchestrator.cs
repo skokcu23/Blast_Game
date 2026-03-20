@@ -2,14 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using DG.Tweening;
 
 /// <summary>
-/// Layer mediator: Logic (GameSession) → View (BoardView).
+/// Layer mediator: Logic (GameSession) → View (BoardView) + UI (GameplayUI).
 ///
-/// Clean separation: animation methods receive only DTOs.
-/// No health snapshots. Damage visuals handled internally by AnimationController.
-/// Board access: only in Initialize, ReconcileWithBoard, and BuildObstacleHealthSnapshot
-/// (which is now removed — no longer needed).
+/// Builds lightweight snapshots from logic state for the View and UI layers:
+///   - GoalSnapshot for GameplayUI (instead of passing ObstacleGoalTracker)
+///   - Board only accessed for Initialize and ReconcileWithBoard
+///
+/// No health snapshots. No GoalTracker passed to View.
+/// No dead code. No magic numbers.
 /// </summary>
 public class GameOrchestrator : MonoBehaviour
 {
@@ -28,7 +31,6 @@ public class GameOrchestrator : MonoBehaviour
     private bool _isBusy;
 
     public event Action<int> OnMovesChanged;
-    public event Action<ObstacleGoalTracker> OnGoalsUpdated;
     public event Action OnLevelWon;
     public event Action OnLevelFailed;
 
@@ -90,7 +92,7 @@ public class GameOrchestrator : MonoBehaviour
         if (_gameplayUI != null)
         {
             _gameplayUI.UpdateMoves(_session.MovesRemaining);
-            _gameplayUI.InitializeGoals(_session.GoalTracker);
+            _gameplayUI.InitializeGoals(BuildGoalSnapshot());
         }
 
         _isBusy = false;
@@ -130,11 +132,10 @@ public class GameOrchestrator : MonoBehaviour
             if (_gameplayUI != null)
             {
                 _gameplayUI.UpdateMoves(turnResult.MovesRemaining);
-                _gameplayUI.UpdateGoals(_session.GoalTracker);
+                _gameplayUI.UpdateGoals(BuildGoalSnapshot());
             }
 
             OnMovesChanged?.Invoke(turnResult.MovesRemaining);
-            OnGoalsUpdated?.Invoke(_session.GoalTracker);
 
             HandleGameState(turnResult.StateAfterTurn);
         }
@@ -149,7 +150,31 @@ public class GameOrchestrator : MonoBehaviour
     }
 
     // ==========================================
-    // STEP DISPATCHER — Clean, no health data
+    // SNAPSHOT BUILDERS — Mediator extracts data for View/UI
+    // ==========================================
+
+    /// <summary>
+    /// Build a lightweight goal snapshot from ObstacleGoalTracker.
+    /// GameplayUI receives this instead of the tracker itself.
+    /// </summary>
+    private GoalSnapshot BuildGoalSnapshot()
+    {
+        var tracker = _session.GoalTracker;
+        var snapshot = new GoalSnapshot();
+
+        snapshot.GoalTypes = tracker.GetGoalTypes();
+
+        foreach (var obstacleId in snapshot.GoalTypes)
+        {
+            snapshot.InitialCounts[obstacleId] = tracker.GetInitialCount(obstacleId);
+            snapshot.RemainingCounts[obstacleId] = tracker.GetRemainingCount(obstacleId);
+        }
+
+        return snapshot;
+    }
+
+    // ==========================================
+    // STEP DISPATCHER
     // ==========================================
 
     private async Task AnimateTurnSteps(TurnResult turnResult)
@@ -168,7 +193,10 @@ public class GameOrchestrator : MonoBehaviour
 
                 case TurnStepType.RocketCreated:
                     _boardView.SpawnRocketVisual(step.RocketCreationData);
-                    await Task.Delay(200);
+                    // Fix 2: DOTween delay respects Time.timeScale (Task.Delay doesn't)
+                    await DOVirtual.DelayedCall(
+                        _boardView.RocketSpawnPause, () => { }, false
+                    ).ToTask();
                     break;
 
                 case TurnStepType.RocketExplosion:
@@ -176,10 +204,8 @@ public class GameOrchestrator : MonoBehaviour
                     break;
 
                 case TurnStepType.ComboExplosion:
-                    List<Task> comboTasks = new List<Task>();
-                    foreach (var data in step.ComboExplosionData)
-                        comboTasks.Add(_boardView.AnimateRocketExplosion(data));
-                    await Task.WhenAll(comboTasks);
+                    // Fix 1: single method handles cleanup once + parallel projectiles
+                    await _boardView.AnimateComboExplosion(step.ComboExplosionData);
                     break;
 
                 case TurnStepType.Gravity:
@@ -188,10 +214,6 @@ public class GameOrchestrator : MonoBehaviour
 
                 case TurnStepType.Refill:
                     await _boardView.AnimateRefill(step.RefillData);
-                    break;
-
-                case TurnStepType.UpdateDamagedSprites:
-                    // NO-OP: damage visuals handled by CrackDamagedVases
                     break;
             }
         }

@@ -6,12 +6,9 @@ using TMPro;
 /// <summary>
 /// Manages the in-game UI: goal display and move counter.
 ///
-/// Case Study images show:
-///   - Top left: "Goal" label with obstacle icons and remaining counts
-///   - Top right: "Move" label with a number
-///   - Goal icons get a checkmark overlay when cleared
-///
-/// The Orchestrator calls UpdateMoves() and UpdateGoals() via events.
+/// Layer separation: receives GoalSnapshot (lightweight data)
+/// instead of ObstacleGoalTracker (logic layer object).
+/// The Orchestrator builds snapshots as the layer mediator.
 /// </summary>
 public class GameplayUI : MonoBehaviour
 {
@@ -19,32 +16,29 @@ public class GameplayUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _moveCountText;
 
     [Header("Goal Display")]
-    [SerializeField] private Transform _goalContainer; // Parent for goal icons
-    [SerializeField] private GameObject _goalItemPrefab; // Prefab with icon + count text
+    [SerializeField] private Transform _goalContainer;
+    [SerializeField] private GameObject _goalItemPrefab;
 
     [Header("Goal Sprites")]
     [SerializeField] private Sprite _boxGoalSprite;
     [SerializeField] private Sprite _stoneGoalSprite;
     [SerializeField] private Sprite _vaseGoalSprite;
-    [SerializeField] private Sprite _goalCheckSprite; // Checkmark overlay
+    [SerializeField] private Sprite _goalCheckSprite;
 
     private Dictionary<string, GoalItemUI> _goalItems = new Dictionary<string, GoalItemUI>();
 
     /// <summary>
-    /// Initialize goals from the tracker. Call once when level loads.
+    /// Initialize goal display from a snapshot. Call once when level loads.
     /// </summary>
-    public void InitializeGoals(ObstacleGoalTracker tracker)
+    public void InitializeGoals(GoalSnapshot snapshot)
     {
-        // Clear existing goal items
         foreach (Transform child in _goalContainer)
             Destroy(child.gameObject);
         _goalItems.Clear();
 
-        var goalTypes = tracker.GetGoalTypes();
-
-        foreach (var obstacleId in goalTypes)
+        foreach (var obstacleId in snapshot.GoalTypes)
         {
-            int count = tracker.GetInitialCount(obstacleId);
+            if (!snapshot.InitialCounts.TryGetValue(obstacleId, out int count)) continue;
             if (count <= 0) continue;
 
             GameObject go = Instantiate(_goalItemPrefab, _goalContainer);
@@ -69,14 +63,14 @@ public class GameplayUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Update goal counts from tracker.
+    /// Update goal counts from a snapshot.
     /// </summary>
-    public void UpdateGoals(ObstacleGoalTracker tracker)
+    public void UpdateGoals(GoalSnapshot snapshot)
     {
         foreach (var kvp in _goalItems)
         {
-            int remaining = tracker.GetRemainingCount(kvp.Key);
-            kvp.Value.UpdateCount(remaining);
+            if (snapshot.RemainingCounts.TryGetValue(kvp.Key, out int remaining))
+                kvp.Value.UpdateCount(remaining);
         }
     }
 

@@ -45,18 +45,21 @@ public class TurnStep
     public BlastResult BlastData;
     public RocketCreationData RocketCreationData;
     public RocketExplosionData ExplosionData;
-    public List<RocketExplosionData> ComboExplosionData; // For parallel combo anims
+    public List<RocketExplosionData> ComboExplosionData;
     public List<ItemMovement> GravityData;
     public List<ItemMovement> RefillData;
-    public List<Coordinate> DamagedSpritesToUpdate; // Coords needing visual refresh
 }
 
 /// <summary>
 /// Types of events within a turn.
+///
+/// Damage visuals (vase cracking) are NOT a step — they're derived state
+/// handled internally by AnimationController.CrackDamagedVases using
+/// each step's DamagedObstacles list.
 /// </summary>
 public enum TurnStepType
 {
-    /// <summary>Cubes popped (< 4 group)</summary>
+    /// <summary>Cubes popped (less than 4 group)</summary>
     Blast,
 
     /// <summary>Cubes merged toward tapped cell + obstacles damaged</summary>
@@ -75,8 +78,5 @@ public enum TurnStepType
     Gravity,
 
     /// <summary>New items spawned from top</summary>
-    Refill,
-
-    /// <summary>Update visual state of damaged obstacles (vase cracking)</summary>
-    UpdateDamagedSprites
+    Refill
 }
